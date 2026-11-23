@@ -37,7 +37,7 @@
 | Validation | `pydantic` v2 + JSON Schema générés | Contrats partagés Python ↔ TS |
 | Tests | `pytest`, `hypothesis` | Propriétés (ex. invariants de portefeuille) |
 | Qualité | `ruff`, `mypy --strict` | P9 |
-| Dashboard | Vite + TypeScript (vanilla ou Preact) | Statique, léger |
+| Dashboard | Vite + TypeScript + Preact | Statique, léger (~4 Ko), composants pour F09 — décidé en F00 (Q1) |
 | Graphiques | `lightweight-charts` (TradingView, Apache-2.0) pour chandeliers ; `uPlot` pour courbes | Performants, petits |
 | Hébergement | GitHub Pages via `actions/deploy-pages` | Gratuit |
 
