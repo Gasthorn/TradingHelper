@@ -131,7 +131,11 @@ class RawBar:                                    # valeurs brutes, NaN possibles
 class PriceSource(Protocol):
     def fetch(self, symbols: Sequence[str], start: date, end: date) -> Mapping[str, list[RawBar]]:
         """Symboles de config en entrée et en sortie ; `end` inclus. Un symbole absent ou vide est
-        omis du résultat. Lève une exception en cas d'erreur réseau / limitation de débit."""
+        omis du résultat. Lève une exception en cas d'erreur réseau / limitation de débit.
+        Si AUCUN symbole demandé n'a de donnée : `SourceError` (précisé en T9 : `yf.download`
+        avale les erreurs et renvoie des colonnes vides ; sans cette règle, R10 ne relancerait
+        jamais un ticker en échec)."""
+class SourceError(Exception): ...
 
 def to_provider_symbol(symbol: str) -> str: ...   # "BRK.B" -> "BRK-B" (R12)
 class YFinanceSource:                             # yf.download(auto_adjust=False, actions=False,

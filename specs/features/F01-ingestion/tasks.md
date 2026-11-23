@@ -64,7 +64,7 @@
   - Fichiers : `src/tradinghelper/data/calendar.py` (`NyseCalendar`, `CLOSE_MARGIN`), `tests/data/test_calendar.py`.
   - Fini quand : tests verts sans réseau ; qualité verte (wrapper typé).
 
-- [ ] **T9** [P] `PriceSource`, `YFinanceSource` et `FakePriceSource` — R16, R5, R12
+- [x] **T9** [P] `PriceSource`, `YFinanceSource` et `FakePriceSource` — R16, R5, R12
   - Tests :
     - `tests/data/test_source.py::test_dot_symbol_mapped_to_dash` ;
     - `::test_download_called_with_auto_adjust_false` (`yf.download` monkeypatché : `auto_adjust=False`, `actions=False`, `progress=False`, `end = end + 1 j`, symboles convertis) ;
