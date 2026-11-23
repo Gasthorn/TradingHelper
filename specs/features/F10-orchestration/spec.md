@@ -27,7 +27,7 @@
 - Checkout (ref `main` à jour) → `th export` → `npm ci && npm run build` → `actions/upload-pages-artifact` → `actions/deploy-pages`.
 
 ### `ci.yml`
-- Voir F00. Ajouter : vérification `schemas/` à jour, test e2e smoke du dashboard.
+- Créé par F00 (R15–R17 : déclencheurs, jobs, permissions, actions épinglées). F10 ajoute : vérification `schemas/` à jour (F02 R6), test e2e smoke du dashboard.
 
 ## Exigences
 - **R1** Chaque workflow DOIT déclarer des `permissions` minimales explicites.

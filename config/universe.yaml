@@ -1,0 +1,36 @@
+# Univers de trading v1 (spec F00, décision Q2) : 20 grandes capitalisations du S&P 500, 10 secteurs GICS.
+# `start` : première séance à télécharger (F01). META est cotée depuis le 2012-05-18.
+currency: USD
+# Benchmark de référence : ingéré et affiché, jamais tradé (décision Q3).
+benchmark: SPY
+tickers:
+  # Information Technology
+  - { symbol: AAPL, name: Apple Inc., sector: Information Technology, start: 2010-01-01 }
+  - { symbol: MSFT, name: Microsoft Corp., sector: Information Technology, start: 2010-01-01 }
+  - { symbol: NVDA, name: NVIDIA Corp., sector: Information Technology, start: 2010-01-01 }
+  # Communication Services
+  - { symbol: GOOGL, name: Alphabet Inc. (Class A), sector: Communication Services, start: 2010-01-01 }
+  - { symbol: META, name: Meta Platforms Inc., sector: Communication Services, start: 2012-05-18 }
+  # Consumer Discretionary
+  - { symbol: AMZN, name: Amazon.com Inc., sector: Consumer Discretionary, start: 2010-01-01 }
+  - { symbol: HD, name: The Home Depot Inc., sector: Consumer Discretionary, start: 2010-01-01 }
+  # Financials
+  - { symbol: JPM, name: JPMorgan Chase & Co., sector: Financials, start: 2010-01-01 }
+  - { symbol: V, name: Visa Inc., sector: Financials, start: 2010-01-01 }
+  # Health Care
+  - { symbol: JNJ, name: Johnson & Johnson, sector: Health Care, start: 2010-01-01 }
+  - { symbol: UNH, name: UnitedHealth Group Inc., sector: Health Care, start: 2010-01-01 }
+  - { symbol: LLY, name: Eli Lilly and Co., sector: Health Care, start: 2010-01-01 }
+  # Energy
+  - { symbol: XOM, name: Exxon Mobil Corp., sector: Energy, start: 2010-01-01 }
+  - { symbol: CVX, name: Chevron Corp., sector: Energy, start: 2010-01-01 }
+  # Consumer Staples
+  - { symbol: PG, name: Procter & Gamble Co., sector: Consumer Staples, start: 2010-01-01 }
+  - { symbol: KO, name: The Coca-Cola Co., sector: Consumer Staples, start: 2010-01-01 }
+  - { symbol: WMT, name: Walmart Inc., sector: Consumer Staples, start: 2010-01-01 }
+  # Industrials
+  - { symbol: CAT, name: Caterpillar Inc., sector: Industrials, start: 2010-01-01 }
+  # Utilities
+  - { symbol: NEE, name: NextEra Energy Inc., sector: Utilities, start: 2010-01-01 }
+  # Materials
+  - { symbol: LIN, name: Linde plc, sector: Materials, start: 2010-01-01 }

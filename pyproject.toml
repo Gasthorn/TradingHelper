@@ -1,0 +1,58 @@
+[project]
+name = "tradinghelper"
+version = "0.1.0"
+description = "Outil d'aide au trading 100 % GitHub : ingestion, backtest, paper trading, dashboard."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.14.4",
+    "pyyaml>=6.0.4",
+    "typer>=0.29.2",
+]
+
+[project.scripts]
+th = "tradinghelper.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "pytest-socket>=0.8.1",
+    "ruff>=0.17.6",
+    "types-pyyaml>=6.0.12.20261122",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+# ruff ≥ 0.17 formate aussi les blocs de code des .md : les specs ne doivent pas être réécrites.
+# research/ : explorations hors pipeline, non soumises au lint (P9, R5).
+extend-exclude = ["*.md", "research"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "N", "PT", "FA"]
+
+[tool.ruff.lint.isort]
+required-imports = ["from __future__ import annotations"]
+known-local-folder = ["conftest"]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+python_version = "3.12"
+strict = true
+files = ["src"]
+exclude = ["^research/"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+# Permet d'importer les constantes de tests/conftest.py (mode importlib).
+pythonpath = ["tests"]
+# --disable-socket : aucun appel réseau dans les tests (R4, CLAUDE.md).
+addopts = ["--import-mode=importlib", "-ra", "--strict-markers", "--disable-socket"]

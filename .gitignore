@@ -1,0 +1,21 @@
+# --- Python ---
+.venv/
+__pycache__/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# --- Dashboard ---
+node_modules/
+dashboard/dist/
+# Données exportées par `th export`, recalculées en CI (P5) : jamais commitées.
+dashboard/public/data/
+
+# --- Recherche ---
+research/**/.ipynb_checkpoints/
+
+# --- Secrets locaux ---
+.env
