@@ -31,6 +31,8 @@ IGNORED_PATHS = [
 
 # R19 : extensions dont la fin de ligne doit être LF.
 LF_EXTENSIONS = ["py", "json", "yaml", "yml", "ts", "tsx", "md", "toml"]
+# Au-delà du minimum R19 : fichiers du dashboard.
+LF_EXTENSIONS_DASHBOARD = ["js", "mjs", "cjs", "html", "css"]
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
@@ -51,7 +53,7 @@ def test_gitignore_excludes(path: str) -> None:
     assert result.returncode == 0, f"{path} n'est pas ignoré par .gitignore"
 
 
-@pytest.mark.parametrize("extension", LF_EXTENSIONS)
+@pytest.mark.parametrize("extension", LF_EXTENSIONS + LF_EXTENSIONS_DASHBOARD)
 def test_gitattributes_forces_lf(extension: str) -> None:
     result = _git("check-attr", "eol", "--", f"any/file.{extension}")
 
@@ -100,3 +102,9 @@ def test_src_never_imports_research() -> None:
                 offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
 
     assert offenders == []
+
+
+def test_nvmrc_forced_lf() -> None:
+    result = _git("check-attr", "eol", "--", "dashboard/.nvmrc")
+
+    assert result.stdout.strip() == "dashboard/.nvmrc: eol: lf"
