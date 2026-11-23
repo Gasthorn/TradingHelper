@@ -11,7 +11,7 @@
   - Fichiers : `pyproject.toml` (layout src, backend `uv_build`, script `th`, `requires-python >=3.12`, `[dependency-groups] dev` avec ruff/mypy/pytest, config ruff/mypy/pytest), `uv.lock`, `.python-version`, `src/tradinghelper/__init__.py`, `src/tradinghelper/py.typed`, `src/tradinghelper/cli.py`, `tests/test_cli.py`, `.gitignore` minimal (`.venv/`, caches Python)
   - Fini quand : `uv run th version` affiche `tradinghelper 0.1.0` ; `uv lock --check` passe ; `uv run ruff check . && uv run ruff format --check . && uv run mypy --strict src/ && uv run pytest` sortent en 0.
 
-- [ ] **T2** `.gitignore` complet et `.gitattributes` en LF — R18, R19, R1
+- [x] **T2** `.gitignore` complet et `.gitattributes` en LF — R18, R19, R1
   - Tests : `tests/test_repo_hygiene.py::test_gitignore_excludes[...]` (paramétré sur la liste R18, via `git check-ignore`), `::test_gitattributes_forces_lf[...]` (paramétré sur les extensions R19, via `git check-attr eol`), `::test_lockfiles_tracked` (`git ls-files uv.lock .python-version`)
   - Fichiers : `.gitignore`, `.gitattributes`, `tests/test_repo_hygiene.py` ; puis `git add --renormalize .`
   - Fini quand : les tests passent ; `git ls-files --eol` montre `i/lf` pour tous les fichiers suivis des extensions R19 ; `git status` ne montre plus d'avertissement CRLF.
