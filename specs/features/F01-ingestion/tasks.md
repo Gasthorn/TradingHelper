@@ -7,7 +7,7 @@
 
 ## Fondations
 
-- [ ] **T1** Dépendances et confinement des imports — R16, R5
+- [x] **T1** Dépendances et confinement des imports — R16, R5
   - Tests : `tests/test_repo_hygiene.py::test_provider_imports_confined` (scan AST de `src/` : `yfinance` et `pandas` importés uniquement dans `data/source.py`, `pandas_market_calendars` uniquement dans `data/calendar.py`).
   - Fichiers : `pyproject.toml` (`yfinance>=1.8`, `pandas>=3.1`, `pandas-market-calendars>=5.6` ; dev `pandas-stubs>=3.1` ; `[[tool.mypy.overrides]] ignore_missing_imports` limité à `yfinance` et `pandas_market_calendars` si nécessaire), `uv.lock`, `src/tradinghelper/data/__init__.py`, `tests/test_repo_hygiene.py`.
   - Fini quand :
