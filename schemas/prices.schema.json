@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Prix bruts d'un symbole — `data/raw/prices/{SYMBOL}.json` (contrat §2).",
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "symbol": {
+      "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+      "title": "Symbol",
+      "type": "string"
+    },
+    "currency": {
+      "const": "USD",
+      "title": "Currency",
+      "type": "string"
+    },
+    "source": {
+      "const": "yfinance",
+      "title": "Source",
+      "type": "string"
+    },
+    "columns": {
+      "maxItems": 7,
+      "minItems": 7,
+      "prefixItems": [
+        {
+          "const": "date",
+          "type": "string"
+        },
+        {
+          "const": "open",
+          "type": "string"
+        },
+        {
+          "const": "high",
+          "type": "string"
+        },
+        {
+          "const": "low",
+          "type": "string"
+        },
+        {
+          "const": "close",
+          "type": "string"
+        },
+        {
+          "const": "adj_close",
+          "type": "string"
+        },
+        {
+          "const": "volume",
+          "type": "string"
+        }
+      ],
+      "title": "Columns",
+      "type": "array"
+    },
+    "last_updated": {
+      "format": "date-time",
+      "title": "Last Updated",
+      "type": "string"
+    },
+    "bars": {
+      "items": {
+        "maxItems": 7,
+        "minItems": 7,
+        "prefixItems": [
+          {
+            "format": "date",
+            "type": "string"
+          },
+          {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          {
+            "minimum": 0,
+            "type": "integer"
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Bars",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "symbol",
+    "currency",
+    "source",
+    "columns",
+    "last_updated",
+    "bars"
+  ],
+  "title": "PricesFile",
+  "type": "object"
+}

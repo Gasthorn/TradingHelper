@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import re
 import socket
 import subprocess
@@ -89,22 +90,65 @@ def test_research_dir_documented() -> None:
     assert (REPO_ROOT / "research" / "README.md").is_file()
 
 
-def test_src_never_imports_research() -> None:
-    """R5 / P9 : le pipeline n'importe jamais le code d'exploration."""
-    offenders: list[str] = []
-    for path in (REPO_ROOT / "src").rglob("*.py"):
+def _imports_of(root: Path, package: str) -> list[str]:
+    """Emplacements `fichier:ligne` sous `root` qui importent `package` (ou un sous-module)."""
+    found: list[str] = []
+    for path in sorted(root.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 modules = [alias.name for alias in node.names]
             elif isinstance(node, ast.ImportFrom):
-                modules = [node.module or ""]
+                # Import relatif (`from . import x`) : jamais un paquet tiers.
+                modules = [node.module or ""] if node.level == 0 else []
             else:
                 continue
-            if any(m == "research" or m.startswith("research.") for m in modules):
-                offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+            if any(m == package or m.startswith(f"{package}.") for m in modules):
+                found.append(f"{path.relative_to(root).as_posix()}:{node.lineno}")
+    return found
+
+
+def test_src_never_imports_research() -> None:
+    """R5 / P9 : le pipeline n'importe jamais le code d'exploration."""
+    assert _imports_of(REPO_ROOT / "src", "research") == []
+
+
+# F01 (plan) : chaque paquet tiers lié à la source est confiné à un seul module.
+PROVIDER_MODULES = {
+    "yfinance": "tradinghelper/data/source.py",
+    "pandas": "tradinghelper/data/source.py",
+    "pandas_market_calendars": "tradinghelper/data/calendar.py",
+}
+
+
+@pytest.mark.parametrize("package", sorted(PROVIDER_MODULES))
+# À l'import, urllib3 (tiré par yfinance) sonde IPv6 en créant une socket locale sur `::1`, sans
+# réseau, et ignore l'échec : pytest-socket la bloque et émet ce UserWarning, sans conséquence.
+@pytest.mark.filterwarnings("ignore:A test tried to use socket:UserWarning")
+def test_provider_packages_importable(package: str) -> None:
+    """F01 R5, R16 : dépendances déclarées et importables sans réseau."""
+    importlib.import_module(package)
+
+
+@pytest.mark.parametrize(("package", "allowed"), sorted(PROVIDER_MODULES.items()))
+def test_provider_imports_confined(package: str, allowed: str) -> None:
+    """F01 R16 : yfinance/pandas dans `data/source.py` seulement, calendrier dans `calendar.py`."""
+    offenders = [
+        loc for loc in _imports_of(REPO_ROOT / "src", package) if not loc.startswith(f"{allowed}:")
+    ]
 
     assert offenders == []
+
+
+def test_imports_of_detects_violation(tmp_path: Path) -> None:
+    """Garde-fou du détecteur : un import interdit est bien trouvé (absolu, `from`, sous-module)."""
+    (tmp_path / "a.py").write_text("import pandas as pd\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text(
+        "from yfinance.utils import x\nfrom . import pandas\n", encoding="utf-8"
+    )
+
+    assert _imports_of(tmp_path, "pandas") == ["a.py:1"]
+    assert _imports_of(tmp_path, "yfinance") == ["b.py:1"]
 
 
 def test_nvmrc_forced_lf() -> None:
@@ -136,6 +180,35 @@ def test_readme_documents_available_commands() -> None:
 
     for command in ("uv sync", "uv run th --help", "uv run th version", "npm run build"):
         assert command in readme, command
+
+
+def test_readme_documents_ingest_and_schemas() -> None:
+    """F01 (T18) : commandes `th ingest` / `th schemas`, options, codes de sortie, TH_DATA_DIR."""
+    readme = _readme()
+
+    for expected in (
+        "uv run th ingest",
+        "--symbols",
+        "--full",
+        "--start",
+        "uv run th schemas",
+        "TH_DATA_DIR",
+        "data/runs/",
+    ):
+        assert expected in readme, expected
+    for code in ("`0`", "`1`", "`2`"):
+        assert code in readme, code
+
+
+def test_docs_list_new_data_modules() -> None:
+    """F01 (plan, décision 1) : `data/source.py` est un module à effets de bord documenté."""
+    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    architecture = (REPO_ROOT / "specs" / "02-architecture.md").read_text(encoding="utf-8")
+
+    assert "data/source.py" in claude_md
+    assert "TH_DATA_DIR" in claude_md
+    assert "source.py" in architecture
+    assert "bars.py" in architecture
 
 
 def test_readme_mentions_dashboard_url_and_github_settings() -> None:

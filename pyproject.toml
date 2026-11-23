@@ -6,9 +6,12 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
+    "pandas>=3.1",
+    "pandas-market-calendars>=5.6",
     "pydantic>=2.14.4",
     "pyyaml>=6.0.4",
     "typer>=0.29.2",
+    "yfinance>=1.8",
 ]
 
 [project.scripts]
@@ -21,6 +24,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "mypy>=2.4.1",
+    "pandas-stubs>=3.1",
     "pytest>=9.2.0",
     "pytest-socket>=0.8.1",
     "ruff>=0.17.6",
@@ -48,6 +52,12 @@ python_version = "3.12"
 strict = true
 files = ["src"]
 exclude = ["^research/"]
+
+# F01 : paquets sans typage (ni py.typed ni stubs), confinés à data/source.py et data/calendar.py
+# derrière des wrappers à signatures strictes (test_provider_imports_confined).
+[[tool.mypy.overrides]]
+module = ["yfinance", "yfinance.*", "pandas_market_calendars", "pandas_market_calendars.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "8.0"
