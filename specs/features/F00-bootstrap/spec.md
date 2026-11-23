@@ -1,6 +1,6 @@
 # F00 — Bootstrap du dépôt
 
-- **Statut** : 🚧 In progress
+- **Statut** : 🔍 Verifying
 - **Milestone** : M0
 - **Dépend de** : —
 - **Contrats** : `03-data-contracts.md` §1 (univers)
@@ -59,26 +59,26 @@ avec des outils de qualité et une configuration validée dès le premier commit
 - **R21** Le dépôt DOIT contenir un fichier `LICENSE` MIT (Q5).
 
 ## Critères d'acceptation
-- [ ] `uv sync && uv run th version` affiche `tradinghelper <X.Y.Z>` et sort en 0. (R2)
-- [ ] `uv lock --check` passe et `git ls-files uv.lock .python-version` les retourne. (R1)
-- [ ] `uv run ruff check . && uv run ruff format --check . && uv run mypy --strict src/ && uv run pytest` sortent en 0 sur un clone frais. (R3)
-- [ ] Un test qui tente `socket.create_connection` échoue avec `SocketBlockedError`. (R4)
-- [ ] Un test vérifie qu'aucun fichier de `src/` n'importe `research`. (R5)
-- [ ] Les trois fichiers de config par défaut se chargent sans erreur via `load_config()`. (R6)
-- [ ] Un test vérifie la résolution du dossier de config (argument, `TH_CONFIG_DIR`, remontée depuis un sous-dossier). (R7)
-- [ ] Un test paramétré couvre chaque règle de R8 et vérifie que le message contient fichier + champ. (R8)
-- [ ] Les tests de config passent avec le réseau bloqué. (R9)
-- [ ] `TH_CONFIG_DIR=<dossier invalide> uv run th version` sort en 2 sans stacktrace. (R10)
-- [ ] `cd dashboard && npm ci && npm run lint && npm run typecheck && npm run build` sort en 0. (R11)
-- [ ] `dashboard/dist/index.html` contient « Hello TradingHelper » et le texte exact de P8. (R12)
-- [ ] Le build passe sans `dashboard/public/data/`. (R13)
-- [ ] Un build avec la variable de `base` définie à `/TradingHelper/` produit des chemins d'assets préfixés. (R14)
-- [ ] La CI est verte sur une PR. (R15, R17)
+- [x] `uv sync && uv run th version` affiche `tradinghelper <X.Y.Z>` et sort en 0. (R2)
+- [x] `uv lock --check` passe et `git ls-files uv.lock .python-version` les retourne. (R1)
+- [x] `uv run ruff check . && uv run ruff format --check . && uv run mypy --strict src/ && uv run pytest` sortent en 0 sur un clone frais. (R3)
+- [x] Un test qui tente `socket.create_connection` échoue avec `SocketBlockedError`. (R4)
+- [x] Un test vérifie qu'aucun fichier de `src/` n'importe `research`. (R5)
+- [x] Les trois fichiers de config par défaut se chargent sans erreur via `load_config()`. (R6)
+- [x] Un test vérifie la résolution du dossier de config (argument, `TH_CONFIG_DIR`, remontée depuis un sous-dossier). (R7)
+- [x] Un test paramétré couvre chaque règle de R8 et vérifie que le message contient fichier + champ. (R8)
+- [x] Les tests de config passent avec le réseau bloqué. (R9)
+- [x] `TH_CONFIG_DIR=<dossier invalide> uv run th version` sort en 2 sans stacktrace. (R10)
+- [x] `cd dashboard && npm ci && npm run lint && npm run typecheck && npm run build` sort en 0. (R11)
+- [x] `dashboard/dist/index.html` contient « Hello TradingHelper » et le texte exact de P8. (R12)
+- [x] Le build passe sans `dashboard/public/data/`. (R13)
+- [x] Un build avec la variable de `base` définie à `/TradingHelper/` produit des chemins d'assets préfixés. (R14)
+- [x] La CI est verte sur une PR. (R15, R17)
 - [ ] Une PR de test avec une erreur ruff, puis une avec une erreur TS, fait échouer le job correspondant. (R15)
-- [ ] Relecture de `ci.yml` : permissions, concurrency, timeouts, actions épinglées par SHA. (R16)
-- [ ] `git check-ignore dashboard/public/data/x.json dashboard/dist .venv node_modules .env` les retourne tous. (R18)
-- [ ] `git ls-files --eol` montre `i/lf` pour les types listés en R19. (R19)
-- [ ] Le README contient les sections attendues et le texte P8 (grep). (R20, R21)
+- [x] Relecture de `ci.yml` : permissions, concurrency, timeouts, actions épinglées par SHA. (R16)
+- [x] `git check-ignore dashboard/public/data/x.json dashboard/dist .venv node_modules .env` les retourne tous. (R18) — `node_modules/` est un motif de dossier : vérifié sur `dashboard/node_modules` et `node_modules/pkg/index.js`.
+- [x] `git ls-files --eol` montre `i/lf` pour les types listés en R19. (R19)
+- [x] Le README contient les sections attendues et le texte P8 (grep). (R20, R21)
 
 ## Hors périmètre
 - Ingestion (F01), commande `th schemas` et vérification de `schemas/` en CI (F02 R6).
