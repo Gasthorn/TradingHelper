@@ -12,13 +12,13 @@ import json
 import os
 import tempfile
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from pydantic import JsonValue, ValidationError
 
 from tradinghelper.config import find_repo_root
-from tradinghelper.schemas import PRICE_COLUMNS, Bar, PricesFile
+from tradinghelper.schemas import PRICE_COLUMNS, Bar, IngestRun, PricesFile, RunReport
 
 ENCODING = "utf-8"
 
@@ -39,6 +39,11 @@ def data_dir() -> Path:
 def prices_path(root: Path, symbol: str) -> Path:
     """`{root}/raw/prices/{SYMBOL}.json` — nom de fichier = symbole de config (F01 R12)."""
     return root / "raw" / "prices" / f"{symbol}.json"
+
+
+def run_report_path(root: Path, session: date) -> Path:
+    """`{root}/runs/{YYYY-MM-DD}.json`, nommé d'après la séance `S` (contrat §6)."""
+    return root / "runs" / f"{session.isoformat()}.json"
 
 
 # --- Écriture atomique -------------------------------------------------------------------------
@@ -156,3 +161,57 @@ def write_prices_if_changed(path: Path, symbol: str, bars: Sequence[Bar], now: d
     )
     atomic_write_text(path, dumps_prices(prices))
     return True
+
+
+# --- Rapport de run ----------------------------------------------------------------------------
+
+
+class RunReportError(Exception):
+    """Rapport de run existant illisible, non conforme ou d'une autre séance (contrat §6)."""
+
+    def __init__(self, path: Path, reason: str) -> None:
+        self.path = path
+        self.reason = reason
+        super().__init__(f"{path.as_posix()}: {reason}")
+
+
+def update_run_report(path: Path, session: date, run: IngestRun) -> None:
+    """Ajoute `run` à la section `ingest` du rapport de la séance `session` (F01 R15).
+
+    Le fichier est créé s'il n'existe pas. Les autres sections (ex. `validate`, F02) sont
+    conservées telles quelles. Un rapport existant illisible, non conforme ou d'une autre
+    séance n'est jamais écrasé (P7) : `RunReportError`. Écriture atomique.
+    """
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        raw = None
+    except OSError as exc:
+        raise RunReportError(path, f"fichier illisible ({exc.strerror})") from exc
+
+    if raw is None:
+        current: dict[str, JsonValue] = {
+            "schema_version": 1,
+            "session_date": session.isoformat(),
+            "ingest": [],
+        }
+    else:
+        try:
+            existing = RunReport.model_validate_json(raw)
+        except ValidationError as exc:
+            raise RunReportError(path, f"rapport invalide : {exc.errors()[0]['msg']}") from exc
+        if existing.session_date != session:
+            raise RunReportError(
+                path,
+                f"séance {existing.session_date.isoformat()} dans le fichier, "
+                f"{session.isoformat()} attendue",
+            )
+        current = existing.model_dump(mode="json")
+
+    ingest = current.get("ingest")
+    runs = list(ingest) if isinstance(ingest, list) else []
+    runs.append(run.model_dump(mode="json"))
+    current["ingest"] = runs
+    # Validation du résultat avant écriture : on n'écrit jamais un rapport hors contrat.
+    RunReport.model_validate(current)
+    atomic_write_json(path, current)

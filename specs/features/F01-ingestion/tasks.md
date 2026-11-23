@@ -48,7 +48,7 @@
   - Fichiers : `src/tradinghelper/data/storage.py` (`PricesFileError`, `read_prices`, `write_prices_if_changed`, `data_dir`).
   - Fini quand : tests verts.
 
-- [ ] **T7** Mise à jour d'une section du rapport de run — R15
+- [x] **T7** Mise à jour d'une section du rapport de run — R15
   - Tests : `tests/data/test_storage.py::test_update_report_creates_file`, `::test_update_report_appends_ingest_run`, `::test_update_report_preserves_other_sections` (une section `validate` préexistante est intacte), `::test_update_report_is_atomic`.
   - Fichiers : `src/tradinghelper/data/storage.py` (`update_run_report`).
   - Fini quand : tests verts ; le fichier produit est validé par `RunReport`.

@@ -12,15 +12,26 @@ import pytest
 from tradinghelper.data import storage
 from tradinghelper.data.storage import (
     PricesFileError,
+    RunReportError,
     atomic_write_json,
     atomic_write_text,
     data_dir,
     dumps_prices,
     prices_path,
     read_prices,
+    run_report_path,
+    update_run_report,
     write_prices_if_changed,
 )
-from tradinghelper.schemas import PRICE_COLUMNS, Bar, PricesFile
+from tradinghelper.schemas import (
+    PRICE_COLUMNS,
+    Bar,
+    IngestArgs,
+    IngestRun,
+    IngestTickerResult,
+    PricesFile,
+    RunReport,
+)
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "prices"
 CANONICAL_AAPL = FIXTURES / "canonical_AAPL.json"
@@ -293,3 +304,124 @@ def test_data_dir_blank_env_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_prices_path_keeps_config_symbol(tmp_path: Path) -> None:
     assert prices_path(tmp_path, "BRK.B") == tmp_path / "raw" / "prices" / "BRK.B.json"
+
+
+def test_run_report_path_named_after_session(tmp_path: Path) -> None:
+    assert run_report_path(tmp_path, date(2026, 11, 23)) == tmp_path / "runs" / "2026-11-23.json"
+
+
+# --- Rapport de run (R15) ----------------------------------------------------------------------
+
+SESSION = date(2026, 11, 23)
+
+
+def _run(started_minute: int = 31, symbol: str = "AAPL") -> IngestRun:
+    return IngestRun(
+        started_at=datetime(2026, 11, 23, 22, started_minute, 2, tzinfo=UTC),
+        finished_at=datetime(2026, 11, 23, 22, started_minute, 50, tzinfo=UTC),
+        duration_s=48.0,
+        args=IngestArgs(symbols=None, full=False, start=None),
+        exit_code=0,
+        tickers=[
+            IngestTickerResult(
+                symbol=symbol,
+                status="ok",
+                mode="incremental",
+                bars_added=1,
+                bars_revised=0,
+                history_rewritten=False,
+                rewrite_reason=None,
+                attempts=1,
+                error=None,
+            )
+        ],
+        warnings=[],
+    )
+
+
+def _load_report(path: Path) -> RunReport:
+    return RunReport.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def test_update_report_creates_file(tmp_path: Path) -> None:
+    target = tmp_path / "runs" / "2026-11-23.json"
+
+    update_run_report(target, SESSION, _run())
+
+    report = _load_report(target)
+    assert report.schema_version == 1
+    assert report.session_date == SESSION
+    assert report.ingest == [_run()]
+    text = target.read_bytes().decode("utf-8")
+    assert text.endswith("}\n")
+    assert "\r" not in text
+
+
+def test_update_report_appends_ingest_run(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    update_run_report(target, SESSION, _run(31, "AAPL"))
+
+    update_run_report(target, SESSION, _run(45, "MSFT"))
+
+    assert [run.tickers[0].symbol for run in _load_report(target).ingest] == ["AAPL", "MSFT"]
+
+
+def test_update_report_preserves_other_sections(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    validate_section = {"errors": [], "warnings": [{"symbol": "AAPL", "rule": "stale"}]}
+    target.write_text(
+        json.dumps(
+            {"schema_version": 1, "session_date": "2026-11-23", "validate": validate_section}
+        ),
+        encoding="utf-8",
+    )
+
+    update_run_report(target, SESSION, _run())
+
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert data["validate"] == validate_section
+    assert len(data["ingest"]) == 1
+
+
+def test_update_report_is_atomic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    target = tmp_path / "2026-11-23.json"
+    update_run_report(target, SESSION, _run())
+    before = target.read_bytes()
+
+    def failing_replace(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
+        raise OSError("coupure (simulée)")
+
+    monkeypatch.setattr(storage.os, "replace", failing_replace)
+
+    with pytest.raises(OSError, match="simulée"):
+        update_run_report(target, SESSION, _run(45))
+
+    assert target.read_bytes() == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["2026-11-23.json"]
+
+
+def test_update_report_rejects_other_session(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    update_run_report(target, SESSION, _run())
+    before = target.read_bytes()
+
+    with pytest.raises(RunReportError, match="2026-11-24"):
+        update_run_report(target, date(2026, 11, 24), _run())
+
+    assert target.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"{tronqu", b'{"schema_version": 2, "session_date": "2026-11-23"}'],
+    ids=["JSON invalide", "non conforme"],
+)
+def test_update_report_refuses_corrupted_report(tmp_path: Path, content: bytes) -> None:
+    target = tmp_path / "2026-11-23.json"
+    target.write_bytes(content)
+
+    with pytest.raises(RunReportError) as excinfo:
+        update_run_report(target, SESSION, _run())
+
+    assert target.as_posix() in str(excinfo.value)
+    assert target.read_bytes() == content
