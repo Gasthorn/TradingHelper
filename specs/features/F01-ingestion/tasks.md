@@ -38,7 +38,7 @@
 
 ## Stockage
 
-- [ ] **T5** Écriture atomique et sérialisation canonique des prix — R8
+- [x] **T5** Écriture atomique et sérialisation canonique des prix — R8
   - Tests : `tests/data/test_storage.py::test_dumps_prices_matches_canonical_fixture` (fixture écrite à la main, format du contrat §2), `::test_dumps_float_shortest_repr` (`228.1`, `231.0`, `229.7312`), `::test_roundtrip_is_byte_identical`, `::test_atomic_write_failure_keeps_original` (`os.replace` monkeypatché pour lever ; fichier d'origine identique et pas de fichier temporaire restant), `::test_atomic_write_json_format` (indentation 2, LF, saut de ligne final, UTF-8 non échappé).
   - Fichiers : `src/tradinghelper/data/storage.py` (`atomic_write_text`, `atomic_write_json`, `dumps_prices`), `tests/fixtures/prices/canonical_AAPL.json`, `tests/data/test_storage.py`.
   - Fini quand : tests verts ; qualité verte.
