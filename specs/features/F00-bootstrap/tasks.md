@@ -81,7 +81,7 @@
 
 ## Vérification
 
-- [ ] **T14** Vérification de tous les critères d'acceptation de la spec (→ `/spec-verify F00`) — R1–R21
+- [x] **T14** Vérification de tous les critères d'acceptation de la spec (→ `/spec-verify F00`) — R1–R21
   - Inclut les deux PR de test pour R15 (une avec une erreur ruff, une avec une erreur TS, sur des branches jetables fermées sans merge) et la vérification depuis un clone frais (R3).
   - Fini quand : chaque case de « Critères d'acceptation » est cochée avec sa preuve (commande, test ou lien de run).
 

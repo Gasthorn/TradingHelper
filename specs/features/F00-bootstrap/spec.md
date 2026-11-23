@@ -74,7 +74,7 @@ avec des outils de qualité et une configuration validée dès le premier commit
 - [x] Le build passe sans `dashboard/public/data/`. (R13)
 - [x] Un build avec la variable de `base` définie à `/TradingHelper/` produit des chemins d'assets préfixés. (R14)
 - [x] La CI est verte sur une PR. (R15, R17)
-- [ ] Une PR de test avec une erreur ruff, puis une avec une erreur TS, fait échouer le job correspondant. (R15)
+- [x] Une PR de test avec une erreur ruff, puis une avec une erreur TS, fait échouer le job correspondant. (R15) — PR #2 : job `python` en échec à « Lint » (F401) ; PR #3 : job `dashboard` en échec à « Typage » (TS2322) ; l'autre job vert dans les deux cas.
 - [x] Relecture de `ci.yml` : permissions, concurrency, timeouts, actions épinglées par SHA. (R16)
 - [x] `git check-ignore dashboard/public/data/x.json dashboard/dist .venv node_modules .env` les retourne tous. (R18) — `node_modules/` est un motif de dossier : vérifié sur `dashboard/node_modules` et `node_modules/pkg/index.js`.
 - [x] `git ls-files --eol` montre `i/lf` pour les types listés en R19. (R19)
