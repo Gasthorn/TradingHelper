@@ -15,7 +15,7 @@
     - le test passe (vacuement, aucun module encore) ;
     - qualité verte.
 
-- [ ] **T2** Modèle `PricesFile` — R17, R8
+- [x] **T2** Modèle `PricesFile` — R17, R8
   - Tests : `tests/test_schemas.py::test_prices_model_accepts_valid_file`, `::test_prices_model_rejects_rule_violations[...]`, paramétré sur : dates non croissantes, date dupliquée, prix ≤ 0, `low > min(open, close)`, `high < max(open, close)`, volume < 0, volume non entier, `columns` différentes de `PRICE_COLUMNS`, `currency` ≠ USD, clé inconnue.
   - Fichiers : `src/tradinghelper/schemas.py` (`PRICE_COLUMNS`, `Bar`, `PricesFile` et ses validateurs), `tests/test_schemas.py`.
   - Fini quand : tests verts ; qualité verte.
