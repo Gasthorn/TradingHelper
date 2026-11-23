@@ -8,9 +8,18 @@ import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Final
 
 from tradinghelper.data.source import RawBar
 from tradinghelper.schemas import PRICE_DECIMALS, Bar, IngestWarning, WarningRule
+
+# Séances re-téléchargées avant la dernière barre stockée pour détecter les révisions (R3).
+OVERLAP_SESSIONS: Final = 5
+
+# Écart relatif sur `close` ou `adj_close` au-delà duquel l'historique est réécrit (R4).
+# Les prix étant arrondis à 4 décimales, le bruit d'arrondi reste sous ce seuil pour tout
+# prix >= 1 $ (vrai pour l'univers v1 de grandes capitalisations).
+REVISION_TOL: Final = 1e-4
 
 
 @dataclass(frozen=True)
@@ -78,3 +87,71 @@ def clean_bars(
             kept.append(outcome)
     kept.sort(key=lambda b: b[0])
     return Cleaned(bars=kept, warnings=warnings)
+
+
+@dataclass(frozen=True)
+class Merge:
+    """Résultat de la fusion du recouvrement (R3)."""
+
+    bars: list[Bar]
+    added: int
+    revised: int
+    warnings: list[IngestWarning] = field(default_factory=list)
+
+
+def _relative_change(old: float, new: float) -> float:
+    return abs(new - old) / abs(old)
+
+
+def needs_rewrite(stored: Sequence[Bar], fresh: Sequence[Bar], *, since: date) -> bool:
+    """Vrai si, sur une séance `>= since` présente des deux côtés, `close` ou `adj_close`
+    diffère de plus de `REVISION_TOL` (split, dividende : historique ajusté réécrit, R4)."""
+    by_date = {bar[0]: bar for bar in stored if bar[0] >= since}
+    for bar in fresh:
+        old = by_date.get(bar[0])
+        if old is None:
+            continue
+        if (
+            _relative_change(old[4], bar[4]) > REVISION_TOL
+            or _relative_change(old[5], bar[5]) > REVISION_TOL
+        ):
+            return True
+    return False
+
+
+def merge_overlap(
+    symbol: str, stored: Sequence[Bar], fresh: Sequence[Bar], *, since: date
+) -> Merge:
+    """Fusionne une réponse incrémentale dans l'historique stocké (R3).
+
+    - barre fraîche datée `>= since` absente du stock (nouvelle séance ou trou) : ajoutée ;
+    - barre du recouvrement différente : remplacée (`revised`) ;
+    - barre stockée du recouvrement absente de la réponse : conservée, avertissement ;
+    - barres stockées antérieures à `since` : intactes (les barres fraîches plus anciennes
+      sont ignorées).
+    """
+    merged = {bar[0]: bar for bar in stored}
+    fresh_dates: set[date] = set()
+    added = revised = 0
+    for bar in fresh:
+        day = bar[0]
+        if day < since:
+            continue
+        fresh_dates.add(day)
+        old = merged.get(day)
+        if old is None:
+            added += 1
+        elif old != bar:
+            revised += 1
+        merged[day] = bar
+    warnings = [
+        IngestWarning(symbol=symbol, date=bar[0], rule="missing_overlap_bar")
+        for bar in stored
+        if bar[0] >= since and bar[0] not in fresh_dates
+    ]
+    return Merge(
+        bars=[merged[day] for day in sorted(merged)],
+        added=added,
+        revised=revised,
+        warnings=warnings,
+    )

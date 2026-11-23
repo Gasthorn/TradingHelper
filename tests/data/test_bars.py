@@ -1,4 +1,4 @@
-"""Tests des fonctions pures sur les barres (F01 — R5, R6 ; R3, R4 en T11)."""
+"""Tests des fonctions pures sur les barres (F01 — R5, R6, R3, R4)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,16 @@ from typing import Any
 
 import pytest
 
-from tradinghelper.data.bars import clean_bars
+from tradinghelper.data.bars import (
+    OVERLAP_SESSIONS,
+    REVISION_TOL,
+    clean_bars,
+    merge_overlap,
+    needs_rewrite,
+)
 from tradinghelper.data.calendar import NyseCalendar
 from tradinghelper.data.source import RawBar
-from tradinghelper.schemas import PRICE_COLUMNS, PricesFile
+from tradinghelper.schemas import PRICE_COLUMNS, Bar, PricesFile
 
 CAL = NyseCalendar()
 S = date(2026, 11, 24)  # dernière séance clôturée des tests
@@ -173,3 +179,141 @@ def test_output_always_satisfies_contract() -> None:
         "ohlc_inconsistent",
     ]
     assert cleaned.bars[-1][0] == CAL.shift(S, -1)
+
+
+# --- Fusion du recouvrement (R3) et détection de révision (R4) ----------------------------------
+
+
+def _bar(day: date, close: float = 230.95, adj: float = 229.7312, volume: int = 1000) -> Bar:
+    return (day, 228.1, 240.0, 220.0, close, adj, volume)
+
+
+D16, D17, D18, D19, D20, D23, D24 = (date(2026, 11, d) for d in (16, 17, 18, 19, 20, 23, 24))
+STORED = [_bar(D16), _bar(D17), _bar(D18), _bar(D19), _bar(D20)]
+SINCE = D17  # début de la fenêtre de recouvrement de la fixture : du 17 au 20/11
+
+
+def test_constants() -> None:
+    assert OVERLAP_SESSIONS == 5
+    assert REVISION_TOL == 1e-4
+
+
+def test_merge_appends_new_bars() -> None:
+    fresh = [_bar(D17), _bar(D18), _bar(D19), _bar(D20), _bar(D23), _bar(D24)]
+
+    merge = merge_overlap("AAPL", STORED, fresh, since=SINCE)
+
+    assert merge.bars == [*STORED, _bar(D23), _bar(D24)]
+    assert (merge.added, merge.revised, merge.warnings) == (2, 0, [])
+
+
+def test_merge_identical_overlap_counts_nothing() -> None:
+    merge = merge_overlap("AAPL", STORED, STORED[1:], since=SINCE)
+
+    assert merge.bars == STORED
+    assert (merge.added, merge.revised, merge.warnings) == (0, 0, [])
+
+
+def test_merge_replaces_revised_volume_bar() -> None:
+    fresh = [_bar(D17), _bar(D18), _bar(D19), _bar(D20, volume=2000), _bar(D23)]
+
+    merge = merge_overlap("AAPL", STORED, fresh, since=SINCE)
+
+    assert merge.bars[4] == _bar(D20, volume=2000)
+    assert merge.bars[-1] == _bar(D23)
+    assert (merge.added, merge.revised) == (1, 1)
+
+
+def test_merge_keeps_stored_bar_missing_from_response() -> None:
+    fresh = [_bar(D17), _bar(D19), _bar(D20), _bar(D23)]
+
+    merge = merge_overlap("AAPL", STORED, fresh, since=SINCE)
+
+    assert merge.bars == [*STORED, _bar(D23)]
+    assert [(w.symbol, w.date, w.rule) for w in merge.warnings] == [
+        ("AAPL", D18, "missing_overlap_bar")
+    ]
+
+
+def test_merge_ignores_fresh_bars_before_since() -> None:
+    fresh = [_bar(D16, volume=9), _bar(D17), _bar(D23)]
+
+    merge = merge_overlap("AAPL", STORED, fresh, since=SINCE)
+
+    assert merge.bars[0] == _bar(D16)
+    assert merge.added == 1
+
+
+def test_merge_fills_gap_inside_overlap() -> None:
+    stored = [_bar(D16), _bar(D17), _bar(D19), _bar(D20)]
+    fresh = [_bar(D17), _bar(D18), _bar(D19), _bar(D20)]
+
+    merge = merge_overlap("AAPL", stored, fresh, since=SINCE)
+
+    assert [b[0] for b in merge.bars] == [D16, D17, D18, D19, D20]
+    assert merge.added == 1
+
+
+def test_merge_output_sorted_and_unique() -> None:
+    fresh = [_bar(D24), _bar(D17), _bar(D23)]
+
+    merge = merge_overlap("AAPL", STORED, fresh, since=SINCE)
+
+    dates = [b[0] for b in merge.bars]
+    assert dates == sorted(set(dates))
+
+
+def test_merge_does_not_mutate_inputs() -> None:
+    stored = list(STORED)
+    fresh = [_bar(D20, volume=5), _bar(D23)]
+
+    merge_overlap("AAPL", stored, fresh, since=SINCE)
+
+    assert stored == STORED
+
+
+def test_needs_rewrite_on_dividend_adj_close_change() -> None:
+    # Dividende de 0,3 % : yfinance réajuste tout l'historique d'adj_close.
+    fresh = [_bar(d, adj=round(229.7312 * 0.997, 4)) for d in (D17, D18, D19, D20)]
+
+    assert needs_rewrite(STORED, fresh, since=SINCE) is True
+
+
+def test_needs_rewrite_on_split_close_change() -> None:
+    # Split 2:1 : OHLC (ajustés des splits) divisés par 2.
+    fresh = [_bar(D20, close=230.95 / 2, adj=229.7312 / 2)]
+
+    assert needs_rewrite(STORED, fresh, since=SINCE) is True
+
+
+def test_needs_rewrite_on_close_only() -> None:
+    assert needs_rewrite(STORED, [_bar(D19, close=231.5)], since=SINCE) is True
+
+
+@pytest.mark.parametrize("factor", [1 + 0.9e-4, 1 - 0.9e-4, 1.0])
+def test_no_rewrite_within_tolerance(factor: float) -> None:
+    fresh = [_bar(D20, close=230.95 * factor, adj=229.7312 * factor)]
+
+    assert needs_rewrite(STORED, fresh, since=SINCE) is False
+
+
+def test_just_above_tolerance_triggers_rewrite() -> None:
+    fresh = [_bar(D20, adj=229.7312 * (1 + 1.1e-4))]
+
+    assert needs_rewrite(STORED, fresh, since=SINCE) is True
+
+
+def test_volume_or_ohlc_change_is_not_a_rewrite() -> None:
+    fresh = [(D20, 228.5, 241.0, 219.0, 230.95, 229.7312, 99999)]
+
+    assert needs_rewrite(STORED, fresh, since=SINCE) is False
+
+
+def test_needs_rewrite_ignores_bars_before_since() -> None:
+    fresh = [_bar(D16, adj=1.0), _bar(D17)]
+
+    assert needs_rewrite(STORED, fresh, since=SINCE) is False
+
+
+def test_needs_rewrite_ignores_new_bars() -> None:
+    assert needs_rewrite(STORED, [_bar(D23, close=999.0, adj=999.0)], since=SINCE) is False

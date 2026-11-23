@@ -81,7 +81,7 @@
   - Fichiers : `src/tradinghelper/data/bars.py` (`Cleaned`, `clean_bars`), `tests/data/test_bars.py`.
   - Fini quand : tests verts ; toute sortie de `clean_bars` est acceptée par `PricesFile`, vérifié dans le test.
 
-- [ ] **T11** Fusion du recouvrement et détection de révision — R3, R4
+- [x] **T11** Fusion du recouvrement et détection de révision — R3, R4
   - Tests :
     - `tests/data/test_bars.py::test_merge_appends_new_bars` ;
     - `::test_merge_replaces_revised_volume_bar` (`revised = 1`) ;
