@@ -43,7 +43,7 @@
   - Fichiers : `src/tradinghelper/config.py` (`find_repo_root`, `resolve_config_dir`, branchement dans `load_config`)
   - Fini quand : tests verts ; `cd dashboard; uv run th version` fonctionne une fois T8 fait (vérifié en T8).
 
-- [ ] **T8** Chargement de la config dans la CLI — R10, R2
+- [x] **T8** Chargement de la config dans la CLI — R10, R2
   - Tests : `tests/test_cli.py::test_invalid_config_exits_2_without_traceback` (`TH_CONFIG_DIR` vers un dossier invalide : code 2, message sur stderr, pas de `Traceback`), `::test_help_works_without_valid_config`, `::test_version_from_subdirectory`
   - Fichiers : `src/tradinghelper/cli.py` (callback racine, `ctx.obj = AppConfig`, ensemble `CONFIG_EXEMPT_COMMANDS` vide)
   - Fini quand : tests verts ; `$env:TH_CONFIG_DIR="nope"; uv run th version` sort en 2 avec un message lisible.
