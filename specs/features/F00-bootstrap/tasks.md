@@ -6,7 +6,7 @@
 
 ## Python — squelette et hygiène
 
-- [ ] **T1** Squelette du package et `th version` — R1, R2, R3
+- [x] **T1** Squelette du package et `th version` — R1, R2, R3
   - Tests : `tests/test_cli.py::test_version_prints_package_version`, `::test_help_lists_commands` (écrits d'abord, via `typer.testing.CliRunner`)
   - Fichiers : `pyproject.toml` (layout src, backend `uv_build`, script `th`, `requires-python >=3.12`, `[dependency-groups] dev` avec ruff/mypy/pytest, config ruff/mypy/pytest), `uv.lock`, `.python-version`, `src/tradinghelper/__init__.py`, `src/tradinghelper/py.typed`, `src/tradinghelper/cli.py`, `tests/test_cli.py`, `.gitignore` minimal (`.venv/`, caches Python)
   - Fini quand : `uv run th version` affiche `tradinghelper 0.1.0` ; `uv lock --check` passe ; `uv run ruff check . && uv run ruff format --check . && uv run mypy --strict src/ && uv run pytest` sortent en 0.

@@ -1,6 +1,6 @@
 # F00 — Bootstrap du dépôt
 
-- **Statut** : 🧭 Planned
+- **Statut** : 🚧 In progress
 - **Milestone** : M0
 - **Dépend de** : —
 - **Contrats** : `03-data-contracts.md` §1 (univers)

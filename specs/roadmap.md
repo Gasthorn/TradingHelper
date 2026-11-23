@@ -24,7 +24,7 @@ Pages Portfolios/Health complètes, e2e, Lighthouse, documentation.
 
 | ID | Feature | Milestone | Dépend de | Statut |
 |---|---|---|---|---|
-| F00 | Bootstrap du dépôt | M0 | — | 🧭 Planned |
+| F00 | Bootstrap du dépôt | M0 | — | 🚧 In progress |
 | F01 | Ingestion yFinance | M1 | F00 | 📝 Draft |
 | F02 | Qualité des données | M1 | F01 | 📝 Draft |
 | F08 | Export dashboard (partiel) | M1 | F01, F02 | 📝 Draft |
