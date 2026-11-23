@@ -1,4 +1,4 @@
-"""Tests d'hygiène du dépôt (F00 — R1, R4, R5, R18, R19)."""
+"""Tests d'hygiène du dépôt (F00 — R1, R4, R5, R18, R19, R20, R21)."""
 
 from __future__ import annotations
 
@@ -108,3 +108,44 @@ def test_nvmrc_forced_lf() -> None:
     result = _git("check-attr", "eol", "--", "dashboard/.nvmrc")
 
     assert result.stdout.strip() == "dashboard/.nvmrc: eol: lf"
+
+
+# --- Documentation (R20, R21) -------------------------------------------------------------------
+
+DISCLAIMER_P8 = "Outil expérimental et éducatif. Ceci n'est pas un conseil en investissement."
+
+
+def _readme() -> str:
+    return (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("heading", ["## Installation", "## Commandes `th`", "## Dashboard"])
+def test_readme_has_section(heading: str) -> None:
+    assert any(line.strip() == heading for line in _readme().splitlines()), heading
+
+
+def test_readme_contains_disclaimer() -> None:
+    assert DISCLAIMER_P8 in _readme()
+
+
+def test_readme_documents_available_commands() -> None:
+    readme = _readme()
+
+    for command in ("uv sync", "uv run th --help", "uv run th version", "npm run build"):
+        assert command in readme, command
+
+
+def test_readme_mentions_dashboard_url_and_github_settings() -> None:
+    readme = _readme()
+
+    assert "github.io/TradingHelper/" in readme
+    assert "active après F10" in readme
+    assert "Read and write permissions" in readme  # réglage manuel exigé par F10 R7
+
+
+def test_license_is_mit() -> None:
+    license_text = (REPO_ROOT / "LICENSE").read_text(encoding="utf-8")
+
+    assert license_text.splitlines()[0] == "MIT License"
+    assert "Copyright (c) 2026 Gasthorn" in license_text
+    assert "WITHOUT WARRANTY OF ANY KIND" in license_text

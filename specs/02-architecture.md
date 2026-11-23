@@ -28,14 +28,15 @@
 | Domaine | Choix | Justification |
 |---|---|---|
 | Langage pipeline | Python 3.12 | Écosystème data/ML |
-| Gestion deps | `uv` + `pyproject.toml` + `uv.lock` | Rapide en CI, lockfile |
+| Gestion deps | `uv` + `pyproject.toml` + `uv.lock`, backend de build `uv_build` | Rapide en CI, lockfile ; backend natif uv, sans dépendance de build supplémentaire (F00) |
 | CLI | `typer` → commande `th` | Une commande par étape, appelée par les workflows |
+| Configuration | `config/*.yaml` lus par PyYAML (clés dupliquées refusées), validés par `pydantic` v2 (`extra="forbid"`) | Erreurs explicites fichier + champ ; pas de `pydantic-settings`, aucune surcharge par variables d'environnement n'étant nécessaire (F00) |
 | Données | `pandas`, `pyarrow` (en mémoire uniquement) | Standard |
 | Source | `yfinance` | Gratuit (non officiel, voir P7) |
 | Indicateurs | implémentation maison (`numpy`/`pandas`) | Évite `ta-lib` (binaire C pénible en CI) |
 | ML | `scikit-learn`, `lightgbm` | CPU, rapide, modèles légers (< 1 Mo) |
 | Validation | `pydantic` v2 + JSON Schema générés | Contrats partagés Python ↔ TS |
-| Tests | `pytest`, `hypothesis` | Propriétés (ex. invariants de portefeuille) |
+| Tests | `pytest`, `hypothesis`, `pytest-socket` | Propriétés (ex. invariants de portefeuille) ; réseau bloqué dans les tests |
 | Qualité | `ruff`, `mypy --strict` | P9 |
 | Dashboard | Vite + TypeScript + Preact | Statique, léger (~4 Ko), composants pour F09 — décidé en F00 (Q1) |
 | Graphiques | `lightweight-charts` (TradingView, Apache-2.0) pour chandeliers ; `uPlot` pour courbes | Performants, petits |

@@ -67,7 +67,7 @@
 
 ## Documentation
 
-- [ ] **T12** [P] README, LICENSE et tableau d'architecture — R20, R21, R6
+- [x] **T12** [P] README, LICENSE et tableau d'architecture — R20, R21, R6
   - Tests : `tests/test_repo_hygiene.py::test_readme_sections_and_disclaimer` (sections Installation, Commandes, Dashboard, texte exact P8), `::test_license_is_mit`
   - Fichiers : `README.md` (complété, pas écrasé ; inclut les réglages manuels GitHub de F10 R7), `LICENSE` (MIT, Gasthorn, 2026), `specs/02-architecture.md` (ligne Configuration : pydantic v2 + PyYAML ; backend `uv_build`)
   - Fini quand : tests verts ; le README cite les commandes `th` réellement disponibles (`th --help`, `th version`).
