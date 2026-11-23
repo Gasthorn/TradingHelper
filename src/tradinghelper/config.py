@@ -5,6 +5,7 @@ Aucun appel réseau ici (R9) : la validation porte uniquement sur le contenu des
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from pathlib import Path
 from typing import Annotated, Literal
@@ -27,6 +28,7 @@ from yaml.nodes import MappingNode
 SYMBOL_PATTERN = r"^[A-Z][A-Z0-9.\-]{0,9}$"
 
 CONFIG_FILES = ("universe.yaml", "backtest.yaml", "strategies.yaml")
+CONFIG_DIR_ENV = "TH_CONFIG_DIR"
 
 Symbol = Annotated[str, StringConstraints(pattern=SYMBOL_PATTERN)]
 
@@ -197,6 +199,29 @@ def _validate[M: BaseModel](model: type[M], data: object, file: Path, today: dat
         raise ConfigError(file, _format_loc(tuple(error["loc"])), reason) from None
 
 
+# --- Résolution du dossier (R7) -----------------------------------------------------------------
+
+
+def find_repo_root(start: Path | None = None) -> Path:
+    """Remonte depuis `start` (défaut : répertoire courant) jusqu'au dossier contenant
+    `pyproject.toml`. Lève `ConfigError` si aucun n'est trouvé."""
+    origin = (start if start is not None else Path.cwd()).resolve()
+    for candidate in (origin, *origin.parents):
+        if (candidate / "pyproject.toml").is_file():
+            return candidate
+    raise ConfigError(origin, None, "aucun pyproject.toml trouvé : racine du dépôt introuvable")
+
+
+def resolve_config_dir(config_dir: Path | None = None) -> Path:
+    """Dossier de config : argument > `$TH_CONFIG_DIR` (si non vide) > `<racine>/config`."""
+    if config_dir is not None:
+        return config_dir
+    from_env = os.environ.get(CONFIG_DIR_ENV, "").strip()
+    if from_env:
+        return Path(from_env)
+    return find_repo_root() / "config"
+
+
 # --- Chargement ---------------------------------------------------------------------------------
 
 
@@ -206,7 +231,7 @@ def load_config(config_dir: Path | None = None, *, today: date | None = None) ->
     `today` est injectable pour les tests (défaut : `date.today()`).
     Lève `ConfigError` à la première erreur rencontrée.
     """
-    directory = config_dir if config_dir is not None else Path("config")
+    directory = resolve_config_dir(config_dir)
     reference = today if today is not None else date.today()
 
     def _load[M: BaseModel](model: type[M], filename: str) -> M:

@@ -16,7 +16,9 @@ from tradinghelper.config import (
     UniverseConfig,
     _read_yaml,
     _validate,
+    find_repo_root,
     load_config,
+    resolve_config_dir,
 )
 
 from conftest import TODAY, VALID_BACKTEST, VALID_UNIVERSE, WriteConfig
@@ -296,3 +298,64 @@ def test_unknown_strategy_key(write_config: WriteConfig) -> None:
         load_config(config_dir, today=TODAY)
 
     assert excinfo.value.field == "strategies[0].enabled"
+
+
+# --- Résolution du dossier de config (R7) -------------------------------------------------------
+
+
+@pytest.fixture
+def fake_repo(tmp_path: Path) -> Path:
+    """Faux dépôt : pyproject.toml à la racine, sous-dossier dashboard/src."""
+    repo = tmp_path / "repo"
+    (repo / "dashboard" / "src").mkdir(parents=True)
+    (repo / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
+    return repo
+
+
+def test_resolve_explicit_arg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TH_CONFIG_DIR", str(tmp_path / "from-env"))
+
+    assert resolve_config_dir(tmp_path / "explicit") == tmp_path / "explicit"
+
+
+def test_resolve_env_var(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TH_CONFIG_DIR", str(tmp_path / "from-env"))
+
+    assert resolve_config_dir() == tmp_path / "from-env"
+
+
+def test_resolve_empty_env_var_is_ignored(fake_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TH_CONFIG_DIR", "")
+    monkeypatch.chdir(fake_repo)
+
+    assert resolve_config_dir() == fake_repo.resolve() / "config"
+
+
+def test_resolve_from_subdirectory(fake_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TH_CONFIG_DIR", raising=False)
+    monkeypatch.chdir(fake_repo / "dashboard" / "src")
+
+    assert resolve_config_dir() == fake_repo.resolve() / "config"
+
+
+def test_find_repo_root_from_explicit_start(fake_repo: Path) -> None:
+    assert find_repo_root(fake_repo / "dashboard") == fake_repo.resolve()
+
+
+def test_no_repo_root_raises(tmp_path: Path) -> None:
+    orphan = tmp_path / "orphan"
+    orphan.mkdir()
+    if any((parent / "pyproject.toml").is_file() for parent in [orphan, *orphan.parents]):
+        pytest.skip("un pyproject.toml existe au-dessus du dossier temporaire")
+
+    with pytest.raises(ConfigError, match=r"pyproject\.toml"):
+        find_repo_root(orphan)
+
+
+def test_load_config_without_arg_uses_repo_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TH_CONFIG_DIR", raising=False)
+    monkeypatch.chdir(REPO_ROOT / "tests")
+
+    config = load_config(today=TODAY)
+
+    assert config.config_dir == REPO_ROOT / "config"

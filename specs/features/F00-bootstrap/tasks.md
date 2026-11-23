@@ -38,7 +38,7 @@
   - Fichiers : `src/tradinghelper/config.py` (`BacktestConfig`, `StrategyEntry`, `StrategiesConfig`, `AppConfig`, `load_config`), `config/universe.yaml` (annexe du plan), `config/backtest.yaml`, `config/strategies.yaml`
   - Fini quand : tests verts ; `load_config()` depuis la racine renvoie un `AppConfig` complet.
 
-- [ ] **T7** Résolution du dossier de config — R7
+- [x] **T7** Résolution du dossier de config — R7
   - Tests : `tests/test_config.py::test_resolve_explicit_arg`, `::test_resolve_env_var` (via `monkeypatch.setenv("TH_CONFIG_DIR", …)`), `::test_resolve_from_subdirectory` (`monkeypatch.chdir` dans un sous-dossier d'un faux dépôt), `::test_no_repo_root_raises`
   - Fichiers : `src/tradinghelper/config.py` (`find_repo_root`, `resolve_config_dir`, branchement dans `load_config`)
   - Fini quand : tests verts ; `cd dashboard; uv run th version` fonctionne une fois T8 fait (vérifié en T8).
