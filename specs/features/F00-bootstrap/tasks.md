@@ -50,7 +50,7 @@
 
 ## Dashboard
 
-- [ ] **T9** [P] Scaffold Vite + TS strict + Preact + ESLint — R11
+- [x] **T9** [P] Scaffold Vite + TS strict + Preact + ESLint — R11
   - Tests : pas de logique à tester ; la vérification est faite par les scripts `lint`, `typecheck`, `build`
   - Fichiers : `dashboard/package.json` (scripts `dev`, `lint`, `typecheck`, `build`, `check:dist` ; `engines.node: ">=22 <23"`), `dashboard/package-lock.json`, `dashboard/.nvmrc`, `dashboard/tsconfig.json`, `dashboard/vite.config.ts`, `dashboard/eslint.config.js`, `dashboard/src/main.tsx`, `dashboard/src/App.tsx`, `dashboard/index.html` minimal
   - Fini quand : `cd dashboard; npm ci; npm run lint; npm run typecheck; npm run build` sortent en 0 avec Node 22 ; `tsconfig.json` contient `"strict": true`.
