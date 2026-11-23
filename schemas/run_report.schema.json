@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "IngestArgs": {
+      "additionalProperties": false,
+      "description": "Arguments de `th ingest` journalisés (P4).",
+      "properties": {
+        "symbols": {
+          "anyOf": [
+            {
+              "items": {
+                "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Symbols"
+        },
+        "full": {
+          "title": "Full",
+          "type": "boolean"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Start"
+        }
+      },
+      "required": [
+        "symbols",
+        "full",
+        "start"
+      ],
+      "title": "IngestArgs",
+      "type": "object"
+    },
+    "IngestRun": {
+      "additionalProperties": false,
+      "description": "Une exécution de `th ingest` (F01 R15).",
+      "properties": {
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "finished_at": {
+          "format": "date-time",
+          "title": "Finished At",
+          "type": "string"
+        },
+        "duration_s": {
+          "minimum": 0,
+          "title": "Duration S",
+          "type": "number"
+        },
+        "args": {
+          "$ref": "#/$defs/IngestArgs"
+        },
+        "exit_code": {
+          "enum": [
+            0,
+            1
+          ],
+          "title": "Exit Code",
+          "type": "integer"
+        },
+        "tickers": {
+          "items": {
+            "$ref": "#/$defs/IngestTickerResult"
+          },
+          "title": "Tickers",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/IngestWarning"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "started_at",
+        "finished_at",
+        "duration_s",
+        "args",
+        "exit_code",
+        "tickers",
+        "warnings"
+      ],
+      "title": "IngestRun",
+      "type": "object"
+    },
+    "IngestTickerResult": {
+      "additionalProperties": false,
+      "description": "Résultat de l'ingestion d'un symbole (F01 R15).",
+      "properties": {
+        "symbol": {
+          "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "unchanged",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "initial",
+                "incremental",
+                "full"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mode"
+        },
+        "bars_added": {
+          "minimum": 0,
+          "title": "Bars Added",
+          "type": "integer"
+        },
+        "bars_revised": {
+          "minimum": 0,
+          "title": "Bars Revised",
+          "type": "integer"
+        },
+        "history_rewritten": {
+          "title": "History Rewritten",
+          "type": "boolean"
+        },
+        "rewrite_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "revision",
+                "backfill"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rewrite Reason"
+        },
+        "attempts": {
+          "minimum": 0,
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error"
+        }
+      },
+      "required": [
+        "symbol",
+        "status",
+        "mode",
+        "bars_added",
+        "bars_revised",
+        "history_rewritten",
+        "rewrite_reason",
+        "attempts",
+        "error"
+      ],
+      "title": "IngestTickerResult",
+      "type": "object"
+    },
+    "IngestWarning": {
+      "additionalProperties": false,
+      "description": "Barre écartée ou anomalie non bloquante (F01 R3, R6).",
+      "properties": {
+        "symbol": {
+          "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Date"
+        },
+        "rule": {
+          "enum": [
+            "nan",
+            "non_session_date",
+            "after_last_session",
+            "non_positive_price",
+            "negative_volume",
+            "ohlc_inconsistent",
+            "duplicate_date",
+            "missing_overlap_bar"
+          ],
+          "title": "Rule",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "date",
+        "rule"
+      ],
+      "title": "IngestWarning",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "description": "Rapport de run d'une séance. Chaque commande met à jour sa seule section ;\nles sections des autres features (ex. `validate`, F02) sont conservées telles quelles.",
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "session_date": {
+      "format": "date",
+      "title": "Session Date",
+      "type": "string"
+    },
+    "ingest": {
+      "items": {
+        "$ref": "#/$defs/IngestRun"
+      },
+      "title": "Ingest",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "session_date"
+  ],
+  "title": "RunReport",
+  "type": "object"
+}

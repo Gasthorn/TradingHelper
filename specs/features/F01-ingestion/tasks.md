@@ -25,7 +25,7 @@
   - Fichiers : `src/tradinghelper/schemas.py` (`IngestTickerResult`, `IngestWarning`, `IngestArgs`, `IngestRun`, `RunReport` en `extra="allow"`).
   - Fini quand : tests verts ; l'exemple JSON du contrat §6 est accepté tel quel par `RunReport.model_validate`.
 
-- [ ] **T4** Commande `th schemas` et schémas générés — R17
+- [x] **T4** Commande `th schemas` et schémas générés — R17
   - Tests :
     - `tests/test_schemas.py::test_write_json_schemas_creates_files` (dans `tmp_path`) ;
     - `::test_generated_schemas_match_committed` (régénère en mémoire et compare à `schemas/*.schema.json`) ;

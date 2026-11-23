@@ -6,7 +6,9 @@ de contrat incrémente `schema_version`.
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
+from pathlib import Path
 from typing import Annotated, Final, Literal, Self
 
 from pydantic import (
@@ -179,3 +181,38 @@ class RunReport(BaseModel):
     schema_version: Literal[1]
     session_date: date
     ingest: list[IngestRun] = Field(default_factory=list)
+
+
+# --- Génération des JSON Schemas (`th schemas`) -------------------------------------------------
+
+JSON_SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
+
+# Nom du contrat -> modèle ; fichier généré : `schemas/{nom}.schema.json`.
+SCHEMA_MODELS: Final[dict[str, type[BaseModel]]] = {
+    "prices": PricesFile,
+    "run_report": RunReport,
+}
+
+
+def render_json_schemas() -> dict[str, str]:
+    """Texte de chaque JSON Schema, par nom de fichier. Rendu déterministe :
+    indentation 2, UTF-8 non échappé, fins de ligne LF, saut de ligne final."""
+    rendered: dict[str, str] = {}
+    for name, model in SCHEMA_MODELS.items():
+        schema = {"$schema": JSON_SCHEMA_DIALECT, **model.model_json_schema()}
+        rendered[f"{name}.schema.json"] = json.dumps(schema, indent=2, ensure_ascii=False) + "\n"
+    return rendered
+
+
+def write_json_schemas(out_dir: Path) -> list[Path]:
+    """Écrit les JSON Schemas dans `out_dir` (créé si besoin) ; renvoie les chemins écrits.
+
+    Fichiers générés (pas des données) : écriture directe, ils sont régénérables à l'identique.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for filename, text in render_json_schemas().items():
+        path = out_dir / filename
+        path.write_text(text, encoding="utf-8", newline="\n")
+        written.append(path)
+    return written

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Annotated
+
 import typer
 
 # Typer embarque sa copie de Click ; son Context de base n'a pas d'alias public.
@@ -9,10 +12,11 @@ from typer._click import Context as _ClickContext
 from typer.core import TyperGroup
 
 from tradinghelper import __version__
-from tradinghelper.config import ConfigError, load_config
+from tradinghelper.config import ConfigError, find_repo_root, load_config
+from tradinghelper.schemas import write_json_schemas
 
-# Commandes qui n'ont pas besoin d'une config valide (ex. `th schemas` en F02).
-CONFIG_EXEMPT_COMMANDS: frozenset[str] = frozenset()
+# Commandes qui n'ont pas besoin d'une config valide.
+CONFIG_EXEMPT_COMMANDS: frozenset[str] = frozenset({"schemas"})
 
 HELP_FLAGS = frozenset({"--help", "-h"})
 
@@ -56,3 +60,16 @@ def main(ctx: typer.Context) -> None:
 def version() -> None:
     """Affiche la version du package."""
     typer.echo(f"tradinghelper {__version__}")
+
+
+@app.command()
+def schemas(
+    out_dir: Annotated[
+        Path | None,
+        typer.Option(help="Dossier de sortie (défaut : schemas/ à la racine du dépôt)."),
+    ] = None,
+) -> None:
+    """Génère les JSON Schemas des contrats de données depuis `schemas.py`."""
+    target = out_dir if out_dir is not None else find_repo_root() / "schemas"
+    for path in write_json_schemas(target):
+        typer.echo(f"écrit : {path.as_posix()}")

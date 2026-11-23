@@ -10,16 +10,22 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
+from typer.testing import CliRunner
 
+from tradinghelper.cli import app
 from tradinghelper.schemas import (
     PRICE_COLUMNS,
+    SCHEMA_MODELS,
     IngestTickerResult,
     IngestWarning,
     PricesFile,
     RunReport,
+    render_json_schemas,
+    write_json_schemas,
 )
 
-CONTRACTS = Path(__file__).resolve().parents[1] / "specs" / "03-data-contracts.md"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CONTRACTS = REPO_ROOT / "specs" / "03-data-contracts.md"
 
 
 def _valid_prices() -> dict[str, Any]:
@@ -300,3 +306,78 @@ def test_run_report_requires_schema_version_and_session_date() -> None:
 
     assert "schema_version" in str(excinfo.value)
     assert "session_date" in str(excinfo.value)
+
+
+# --- Génération des JSON Schemas (`th schemas`) -------------------------------------------------
+
+EXPECTED_SCHEMA_FILES = ["prices.schema.json", "run_report.schema.json"]
+
+
+def test_schema_models_registry() -> None:
+    assert {"prices": PricesFile, "run_report": RunReport} == SCHEMA_MODELS
+
+
+def test_render_json_schemas_format() -> None:
+    rendered = render_json_schemas()
+
+    assert sorted(rendered) == EXPECTED_SCHEMA_FILES
+    for name, text in rendered.items():
+        assert text.endswith("}\n"), name
+        assert "\r" not in text, name
+        schema = json.loads(text)
+        assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+        assert text == json.dumps(schema, indent=2, ensure_ascii=False) + "\n", name
+
+
+def test_prices_schema_requires_every_contract_key() -> None:
+    schema = json.loads(render_json_schemas()["prices.schema.json"])
+
+    assert set(schema["required"]) == {
+        "schema_version",
+        "symbol",
+        "currency",
+        "source",
+        "columns",
+        "last_updated",
+        "bars",
+    }
+    assert schema["additionalProperties"] is False
+
+
+def test_run_report_schema_allows_other_sections() -> None:
+    schema = json.loads(render_json_schemas()["run_report.schema.json"])
+
+    assert schema.get("additionalProperties", True) is not False
+    assert set(schema["required"]) == {"schema_version", "session_date"}
+
+
+def test_write_json_schemas_creates_files(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+
+    written = write_json_schemas(out_dir)
+
+    assert sorted(p.name for p in written) == EXPECTED_SCHEMA_FILES
+    rendered = render_json_schemas()
+    for path in written:
+        assert path.read_bytes() == rendered[path.name].encode("utf-8")
+
+
+def test_generated_schemas_match_committed() -> None:
+    """Les fichiers de `schemas/` sont à jour : sinon lancer `uv run th schemas`."""
+    for name, text in render_json_schemas().items():
+        committed = REPO_ROOT / "schemas" / name
+        assert committed.is_file(), f"{name} absent : lancer `uv run th schemas`"
+        assert committed.read_bytes() == text.encode("utf-8"), f"{name} désynchronisé"
+
+
+def test_schemas_command_works_without_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TH_CONFIG_DIR", str(tmp_path / "missing"))
+    out_dir = tmp_path / "schemas"
+
+    result = CliRunner().invoke(app, ["schemas", "--out-dir", str(out_dir)])
+
+    assert result.exit_code == 0, result.output
+    assert sorted(p.name for p in out_dir.iterdir()) == EXPECTED_SCHEMA_FILES
+    assert "prices.schema.json" in result.stdout
