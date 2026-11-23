@@ -6,16 +6,19 @@ de contrat incrémente `schema_version`.
 
 from __future__ import annotations
 
-from datetime import date
-from typing import Annotated, Final, Literal
+from datetime import date, datetime
+from typing import Annotated, Final, Literal, Self
 
 from pydantic import (
+    AfterValidator,
     AwareDatetime,
     BaseModel,
     ConfigDict,
     Field,
+    NonNegativeFloat,
     NonNegativeInt,
     field_validator,
+    model_validator,
 )
 
 from tradinghelper.config import Symbol
@@ -23,6 +26,17 @@ from tradinghelper.config import Symbol
 PRICE_DECIMALS: Final = 4
 
 PRICE_COLUMNS: Final = ("date", "open", "high", "low", "close", "adj_close", "volume")
+
+
+def _require_utc(value: datetime) -> datetime:
+    offset = value.utcoffset()
+    if offset is None or offset.total_seconds() != 0:
+        raise ValueError("horodatage attendu en UTC (suffixe Z)")
+    return value
+
+
+# Horodatage UTC ISO-8601 (CLAUDE.md : « UTC ISO-8601 pour les timestamps »).
+UtcDatetime = Annotated[AwareDatetime, AfterValidator(_require_utc)]
 
 # Prix strictement positif et fini (NaN et infinis refusés).
 Price = Annotated[float, Field(gt=0, allow_inf_nan=False)]
@@ -57,16 +71,8 @@ class PricesFile(_Contract):
     currency: Literal["USD"]
     source: Literal["yfinance"]
     columns: PriceColumns
-    last_updated: AwareDatetime
+    last_updated: UtcDatetime
     bars: list[Bar]
-
-    @field_validator("last_updated")
-    @classmethod
-    def _utc(cls, value: AwareDatetime) -> AwareDatetime:
-        offset = value.utcoffset()
-        if offset is None or offset.total_seconds() != 0:
-            raise ValueError("last_updated doit être en UTC")
-        return value
 
     @field_validator("bars")
     @classmethod
@@ -87,3 +93,89 @@ class PricesFile(_Contract):
             if high < max(open_, close):
                 raise ValueError(f"{where} : high {high} < max(open, close)")
         return bars
+
+
+# --- Rapport de run — `data/runs/{YYYY-MM-DD}.json` (contrat §6) --------------------------------
+
+IngestStatus = Literal["ok", "unchanged", "failed"]
+IngestMode = Literal["initial", "incremental", "full"]
+RewriteReason = Literal["revision", "backfill"]
+WarningRule = Literal[
+    "nan",
+    "non_session_date",
+    "after_last_session",
+    "non_positive_price",
+    "negative_volume",
+    "ohlc_inconsistent",
+    "duplicate_date",
+    "missing_overlap_bar",
+]
+
+
+class IngestTickerResult(_Contract):
+    """Résultat de l'ingestion d'un symbole (F01 R15)."""
+
+    symbol: Symbol
+    status: IngestStatus
+    mode: IngestMode | None  # None : aucun appel (ticker à jour, fichier corrompu)
+    bars_added: NonNegativeInt
+    bars_revised: NonNegativeInt
+    history_rewritten: bool
+    rewrite_reason: RewriteReason | None
+    attempts: NonNegativeInt
+    error: str | None
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if self.history_rewritten != (self.rewrite_reason is not None):
+            raise ValueError(
+                "rewrite_reason doit être renseignée si et seulement si history_rewritten"
+            )
+        if (self.status == "failed") != (self.error is not None):
+            raise ValueError("error doit être renseignée si et seulement si status == 'failed'")
+        return self
+
+
+class IngestWarning(_Contract):
+    """Barre écartée ou anomalie non bloquante (F01 R3, R6)."""
+
+    symbol: Symbol
+    date: date | None
+    rule: WarningRule
+
+
+class IngestArgs(_Contract):
+    """Arguments de `th ingest` journalisés (P4)."""
+
+    symbols: list[Symbol] | None
+    full: bool
+    start: date | None
+
+
+class IngestRun(_Contract):
+    """Une exécution de `th ingest` (F01 R15)."""
+
+    started_at: UtcDatetime
+    finished_at: UtcDatetime
+    duration_s: NonNegativeFloat
+    args: IngestArgs
+    exit_code: Literal[0, 1]
+    tickers: list[IngestTickerResult]
+    warnings: list[IngestWarning]
+
+    @model_validator(mode="after")
+    def _chronological(self) -> Self:
+        if self.finished_at < self.started_at:
+            raise ValueError("finished_at antérieur à started_at")
+        return self
+
+
+class RunReport(BaseModel):
+    """Rapport de run d'une séance. Chaque commande met à jour sa seule section ;
+    les sections des autres features (ex. `validate`, F02) sont conservées telles quelles."""
+
+    model_config = ConfigDict(extra="allow", frozen=True)
+
+    schema_version: Literal[1]
+    session_date: date
+    ingest: list[IngestRun] = Field(default_factory=list)

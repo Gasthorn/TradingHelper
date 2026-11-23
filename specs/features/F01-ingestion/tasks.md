@@ -20,7 +20,7 @@
   - Fichiers : `src/tradinghelper/schemas.py` (`PRICE_COLUMNS`, `Bar`, `PricesFile` et ses validateurs), `tests/test_schemas.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T3** Modèles du rapport de run — R15, R17
+- [x] **T3** Modèles du rapport de run — R15, R17
   - Tests : `tests/test_schemas.py::test_run_report_roundtrip`, `::test_run_report_preserves_unknown_sections` (une section `validate` survit à `model_validate` + `model_dump`), `::test_ingest_ticker_result_enums[...]` (valeurs invalides de `status`, `mode`, `rewrite_reason`, `rule` refusées).
   - Fichiers : `src/tradinghelper/schemas.py` (`IngestTickerResult`, `IngestWarning`, `IngestArgs`, `IngestRun`, `RunReport` en `extra="allow"`).
   - Fini quand : tests verts ; l'exemple JSON du contrat §6 est accepté tel quel par `RunReport.model_validate`.
