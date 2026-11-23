@@ -1,6 +1,6 @@
 # F01 — Ingestion quotidienne des cours (yFinance)
 
-- **Statut** : ✅ Approved (2026-11-23)
+- **Statut** : 🧭 Planned (2026-11-23)
 - **Milestone** : M1
 - **Dépend de** : F00
 - **Contrats** : `03-data-contracts.md` §1, §2, §6
