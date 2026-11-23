@@ -174,7 +174,7 @@
     - `CLAUDE.md` (`data/source.py` dans la liste des modules à effets de bord ; `TH_DATA_DIR`).
   - Fini quand : test vert ; relecture des trois fichiers faite.
 
-- [ ] **T19** Smoke test réseau manuel (non commité) — R5, R12, R11
+- [x] **T19** Smoke test réseau manuel (non commité) — R5, R12, R11
   - Tests : aucun test automatisé (le réseau est interdit dans `pytest`). La preuve est la sortie de la commande, recopiée dans `/spec-verify`.
   - Fichiers : aucun commité. Exécution avec `TH_DATA_DIR` vers un dossier temporaire : `uv run th ingest --symbols AAPL,SPY`, puis une 2e fois.
   - Fini quand :
@@ -182,6 +182,12 @@
     - `adj_close` ≠ `close` sur les anciennes barres (dividendes) ;
     - le 2e run ne fait aucun appel et ne modifie rien ;
     - le dossier temporaire est supprimé, rien n'est ajouté à `data/` dans le dépôt.
+  - Preuve (2026-11-23, 23:25 UTC, yfinance 1.8.0) :
+    - 1er run : « Séance 2026-11-23 : 2 mis à jour, 0 inchangés, 0 en échec », code 0, 1 appel groupé, 3,7 s, aucun avertissement ;
+    - `AAPL.json` et `SPY.json` : 4 249 barres du 2010-01-04 au 2026-11-23, aucune séance NYSE manquante, conformes à `PricesFile` et au format canonique ;
+    - `adj_close != close` sur 2 516/2 516 barres antérieures à 2020 (dividendes) ; `close` AAPL 2010 = 7,64 $ (OHLC déjà ajustés des splits, R5) ;
+    - 2e run : « 0 mis à jour, 2 inchangés », aucun rapport écrit, empreintes SHA-256 des 3 fichiers identiques ;
+    - dossier temporaire supprimé, `git status` propre, pas de dossier `data/` dans le dépôt.
 
 - [ ] **T_final** Vérification : tous les critères d'acceptation de la spec (→ `/spec-verify F01`) — R1–R17
   - Tests : suite complète ; chacun des 20 critères est relié à un test nommé ou à la preuve de T19.
