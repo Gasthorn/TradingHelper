@@ -20,6 +20,7 @@ build-backend = "uv_build"
 dev = [
     "mypy>=2.4.1",
     "pytest>=9.2.0",
+    "pytest-socket>=0.8.1",
     "ruff>=0.17.6",
 ]
 
@@ -28,7 +29,8 @@ target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
 # ruff ≥ 0.17 formate aussi les blocs de code des .md : les specs ne doivent pas être réécrites.
-extend-exclude = ["*.md"]
+# research/ : explorations hors pipeline, non soumises au lint (P9, R5).
+extend-exclude = ["*.md", "research"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "N", "PT", "FA"]
@@ -40,8 +42,10 @@ required-imports = ["from __future__ import annotations"]
 python_version = "3.12"
 strict = true
 files = ["src"]
+exclude = ["^research/"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-addopts = ["--import-mode=importlib", "-ra", "--strict-markers"]
+# --disable-socket : aucun appel réseau dans les tests (R4, CLAUDE.md).
+addopts = ["--import-mode=importlib", "-ra", "--strict-markers", "--disable-socket"]

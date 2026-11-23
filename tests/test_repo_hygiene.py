@@ -1,11 +1,14 @@
-"""Tests d'hygiène du dépôt (F00 — R1, R18, R19)."""
+"""Tests d'hygiène du dépôt (F00 — R1, R4, R5, R18, R19)."""
 
 from __future__ import annotations
 
+import ast
+import socket
 import subprocess
 from pathlib import Path
 
 import pytest
+from pytest_socket import SocketBlockedError
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -66,3 +69,34 @@ def test_lockfiles_tracked() -> None:
     result = _git("ls-files", "--error-unmatch", "uv.lock", ".python-version")
 
     assert result.returncode == 0, result.stderr
+
+
+# pytest-socket émet un UserWarning à chaque tentative bloquée : ici elle est voulue.
+@pytest.mark.filterwarnings("ignore:A test tried to use socket:UserWarning")
+def test_network_is_blocked() -> None:
+    """R4 : aucun test ne peut ouvrir de connexion réseau."""
+    with pytest.raises(SocketBlockedError):
+        socket.create_connection(("example.com", 80), timeout=1)
+
+
+def test_research_dir_documented() -> None:
+    """R5 : le dossier research/ existe et explique son rôle."""
+    assert (REPO_ROOT / "research" / "README.md").is_file()
+
+
+def test_src_never_imports_research() -> None:
+    """R5 / P9 : le pipeline n'importe jamais le code d'exploration."""
+    offenders: list[str] = []
+    for path in (REPO_ROOT / "src").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                modules = [node.module or ""]
+            else:
+                continue
+            if any(m == "research" or m.startswith("research.") for m in modules):
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+
+    assert offenders == []

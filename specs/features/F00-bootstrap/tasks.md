@@ -16,7 +16,7 @@
   - Fichiers : `.gitignore`, `.gitattributes`, `tests/test_repo_hygiene.py` ; puis `git add --renormalize .`
   - Fini quand : les tests passent ; `git ls-files --eol` montre `i/lf` pour tous les fichiers suivis des extensions R19 ; `git status` ne montre plus d'avertissement CRLF.
 
-- [ ] **T3** Blocage réseau et dossier `research/` — R4, R5
+- [x] **T3** Blocage réseau et dossier `research/` — R4, R5
   - Tests : `tests/test_repo_hygiene.py::test_network_is_blocked` (tente `socket.create_connection`, attend `SocketBlockedError`), `::test_src_never_imports_research` (scan AST de `src/`)
   - Fichiers : `pyproject.toml` (dev : `pytest-socket` ; `addopts = "--disable-socket"` ; exclusion `research/` pour ruff et mypy), `uv.lock`, `research/README.md`
   - Fini quand : les deux tests passent ; un fichier `.py` volontairement non conforme placé dans `research/` n'est pas signalé par ruff (vérifié puis supprimé).
