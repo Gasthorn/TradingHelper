@@ -23,7 +23,7 @@
 
 ## Python — configuration
 
-- [ ] **T4** Lecteur YAML strict et `ConfigError` — R8, R9
+- [x] **T4** Lecteur YAML strict et `ConfigError` — R8, R9
   - Tests : `tests/test_config.py::test_read_yaml_errors[...]` paramétré : fichier absent, fichier vide, YAML mal formé, clé dupliquée, racine non-mapping — chaque cas vérifie que `str(err)` contient le chemin du fichier
   - Fichiers : `src/tradinghelper/config.py` (`ConfigError`, `_read_yaml` avec `SafeLoader` rejetant les clés dupliquées), `pyproject.toml` (`pyyaml`, dev `types-PyYAML`), `uv.lock`, `tests/test_config.py`
   - Fini quand : tests verts sous `--disable-socket` ; `mypy --strict src/` passe.
