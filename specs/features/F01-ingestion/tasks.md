@@ -94,7 +94,7 @@
   - Fichiers : `src/tradinghelper/data/bars.py` (`REVISION_TOL`, `OVERLAP_SESSIONS`, `Merge`, `merge_overlap`, `needs_rewrite`).
   - Fini quand : tests verts ; fonctions pures (aucun import d'E/S dans `bars.py`).
 
-- [ ] **T12** Relances avec backoff — R10
+- [x] **T12** Relances avec backoff — R10
   - Tests : `tests/data/test_ingest.py::test_with_retry_first_try` (1 tentative, aucun `sleep`), `::test_with_retry_succeeds_after_two_failures` (attentes `[2, 4]`, 3 tentatives), `::test_with_retry_gives_up_after_four_attempts` (attentes `[2, 4, 8]`, `RetryError.attempts == 4`, cause conservée).
   - Fichiers : `src/tradinghelper/data/ingest.py` (`RETRY_DELAYS`, `RetryError`, `with_retry`), `tests/data/test_ingest.py`.
   - Fini quand : tests verts.
