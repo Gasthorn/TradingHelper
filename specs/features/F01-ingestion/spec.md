@@ -1,6 +1,6 @@
 # F01 — Ingestion quotidienne des cours (yFinance)
 
-- **Statut** : 📝 Draft (revue du 2026-11-23 appliquée, en attente de validation)
+- **Statut** : ✅ Approved (2026-11-23)
 - **Milestone** : M1
 - **Dépend de** : F00
 - **Contrats** : `03-data-contracts.md` §1, §2, §6
@@ -116,7 +116,7 @@ de façon incrémentale, atomique, idempotente et diffable dans `data/raw/prices
 ## Dépendances introduites (à justifier dans `plan.md`)
 `yfinance`, `pandas`, `pandas_market_calendars` (calendrier NYSE avec demi-séances, cf. `02-architecture.md`).
 
-## Décisions (revue du 2026-11-23, à valider)
+## Décisions (validées le 2026-11-23)
 - **Q1** Rapport de run : schéma `RunReport` dans `schemas.py` ; nommé d'après `S` ; chaque commande met à jour sa seule section ; `ingest` est une liste d'exécutions ; non écrit s'il n'y a rien à signaler (R15).
 - **Q2** Seuil de révision : tolérance quasi nulle `1e-4` sur `close` et `adj_close` (au lieu de 0,5 % sur `adj_close`), pour capter tous les dividendes et garder un facteur `adj_close/close` cohérent (R4).
 - **Q3** Réécriture et P5 : journalisée dans le rapport et dans le message de commit (F10 R2), pas d'ADR.
