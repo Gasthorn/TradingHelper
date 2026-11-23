@@ -5,3 +5,5 @@ from __future__ import annotations
 from importlib.metadata import version
 
 __version__ = version("tradinghelper")
+
+import os  # erreur volontaire : import inutilisé (F401), PR de test R15
