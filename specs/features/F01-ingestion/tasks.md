@@ -151,7 +151,7 @@
 
 ## CLI et documentation
 
-- [ ] **T17** Commande `th ingest` — R13, R14, R15, R16
+- [x] **T17** Commande `th ingest` — R13, R14, R15, R16
   - Tests (`tests/test_cli_ingest.py`, `CliRunner`, `TH_CONFIG_DIR` vers `write_config`, `TH_DATA_DIR` vers `tmp_path`, `_make_source` et `_now` monkeypatchés) :
     - `::test_ingest_writes_prices_and_report_on_change` ;
     - `::test_no_report_on_holiday_or_second_run` (code 0, aucun fichier dans `runs/`, résumé sur stdout) ;
