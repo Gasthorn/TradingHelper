@@ -76,7 +76,7 @@
   - Fichiers : `src/tradinghelper/data/source.py` (`RawBar`, `PriceSource`, `to_provider_symbol`, `YFinanceSource`), `tests/fakes.py` (`FakePriceSource`, `FakeClock`, `RecordingSleep`, générateur de barres synthétiques sur les séances NYSE), `tests/data/test_source.py`, `tests/test_fakes.py`.
   - Fini quand : tests verts ; test de confinement de T1 vert ; qualité verte.
 
-- [ ] **T10** Nettoyage des barres — R5, R6
+- [x] **T10** Nettoyage des barres — R5, R6
   - Tests : `tests/data/test_bars.py::test_prices_rounded_to_4_decimals_volume_int`, `::test_drops_invalid_bars[nan|weekend|holiday|after_S|non_positive|negative_volume|high_lt_low_after_rounding]` (chaque cas : barre écartée + `IngestWarning` avec la bonne `rule` et la bonne date), `::test_dedup_keeps_last_occurrence` (+ avertissement `duplicate_date`), `::test_zero_volume_kept`, `::test_output_sorted_by_date`.
   - Fichiers : `src/tradinghelper/data/bars.py` (`Cleaned`, `clean_bars`), `tests/data/test_bars.py`.
   - Fini quand : tests verts ; toute sortie de `clean_bars` est acceptée par `PricesFile`, vérifié dans le test.
