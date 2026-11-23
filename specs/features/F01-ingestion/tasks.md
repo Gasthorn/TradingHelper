@@ -101,7 +101,7 @@
 
 ## Orchestration `ingest`
 
-- [ ] **T13** Planification par ticker : initial, à jour, benchmark, fichier corrompu — R1, R2, R3, R9
+- [x] **T13** Planification par ticker : initial, à jour, benchmark, fichier corrompu — R1, R2, R3, R9
   - Tests (`tests/data/test_ingest.py`, avec `FakePriceSource`, le vrai `NyseCalendar` et `FakeClock`) :
     - `::test_initial_run_creates_all_files_including_benchmark` (dossier `prices/` absent au départ ; fichiers conformes à `PricesFile` et à `dumps_prices`) ;
     - `::test_benchmark_start_is_min_ticker_start` ;
