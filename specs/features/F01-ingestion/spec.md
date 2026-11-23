@@ -1,6 +1,6 @@
 # F01 — Ingestion quotidienne des cours (yFinance)
 
-- **Statut** : 🔍 Verifying (20/20 critères prouvés le 2026-11-24 ; reste la CI verte sur la PR)
+- **Statut** : ✔️ Done
 - **Milestone** : M1
 - **Dépend de** : F00
 - **Contrats** : `03-data-contracts.md` §1, §2, §6

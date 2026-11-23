@@ -189,10 +189,11 @@
     - 2e run : « 0 mis à jour, 2 inchangés », aucun rapport écrit, empreintes SHA-256 des 3 fichiers identiques ;
     - dossier temporaire supprimé, `git status` propre, pas de dossier `data/` dans le dépôt.
 
-- [ ] **T_final** Vérification : tous les critères d'acceptation de la spec (→ `/spec-verify F01`) — R1–R17
+- [x] **T_final** Vérification : tous les critères d'acceptation de la spec (→ `/spec-verify F01`) — R1–R17
   - Tests : suite complète ; chacun des 20 critères est relié à un test nommé ou à la preuve de T19.
   - Fichiers : `specs/features/F01-ingestion/spec.md` (cases cochées avec leur preuve, statut), `specs/roadmap.md`.
   - Fini quand : 20/20 critères cochés avec preuve ; qualité verte ; CI verte sur la PR.
+  - Preuve : 20/20 critères cochés dans `spec.md` (commit dd740dc) ; suite locale verte (370 tests) ; CI verte sur la PR #5 (jobs `python` et `dashboard`, run 45290403348) ; F01 validée Done le 2026-11-24.
 
 ## Couverture exigences → tâches
 | Exigence | Tâches |
