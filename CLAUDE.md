@@ -31,15 +31,16 @@ uv run th --help                 # CLI du pipeline
 uv run pytest                    # tests (aucun appel réseau autorisé)
 uv run ruff check . && uv run ruff format --check . && uv run mypy --strict src/
 uv run th schemas                # régénérer schemas/ depuis schemas.py
+uv run th ingest                 # télécharger les cours (réseau) ; TH_DATA_DIR=<dossier> pour écrire ailleurs que data/
 cd dashboard && npm ci && npm run dev     # dashboard local (après `uv run th export`)
 ```
 
 ## Conventions de code
 - Python 3.12, typage complet, `from __future__ import annotations`, dataclasses/pydantic plutôt que dicts.
-- Fonctions pures dans `features/`, `backtest/metrics.py` ; effets de bord (réseau, fichiers) isolés dans `data/storage.py`, `data/ingest.py`, `cli.py`.
+- Fonctions pures dans `features/`, `backtest/metrics.py` ; effets de bord (réseau, fichiers) isolés dans `data/source.py` (seul module qui importe yfinance/pandas), `data/storage.py`, `data/ingest.py`, `cli.py`.
 - Jamais d'appel réseau dans les tests : utiliser `FakePriceSource` et les fixtures de `tests/fixtures/`.
 - Toute stochasticité passe par un `numpy.random.Generator` seedé reçu en paramètre.
-- Écritures de fichiers de données : toujours via `storage.atomic_write_json`.
+- Écritures de fichiers de données : toujours atomiques via `storage` (`atomic_write_json` ; prix : `write_prices_if_changed`, sérialisation canonique `dumps_prices`).
 - Dates : `datetime.date` pour les séances, UTC ISO-8601 pour les timestamps.
 - Dashboard : TypeScript strict, types générés depuis `schemas/`, pas de framework lourd.
 

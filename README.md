@@ -38,12 +38,54 @@ La CLI `th` expose une commande par étape du pipeline. Les commandes disponible
 |---|---|
 | `uv run th --help` | Liste les commandes. |
 | `uv run th version` | Affiche la version du package (`tradinghelper X.Y.Z`). |
+| `uv run th ingest` | Télécharge les cours journaliers (yfinance) de l'univers et du benchmark. |
+| `uv run th schemas` | Régénère les JSON Schemas de `schemas/` depuis `src/tradinghelper/schemas.py`. |
 
-Les étapes suivantes (`th ingest`, `th validate`, `th export`…) arrivent avec les features F01 et au-delà.
+Les étapes suivantes (`th validate`, `th export`…) arrivent avec les features F02 et au-delà.
+
+### `th ingest`
+
+Télécharge les barres journalières OHLCV de tous les tickers de `config/universe.yaml` et du benchmark
+dans `data/raw/prices/{SYMBOLE}.json` (une barre par ligne, format canonique du
+[contrat §2](specs/03-data-contracts.md)).
+
+- **Premier run** : historique complet depuis le `start` de chaque ticker (le benchmark démarre au plus
+  ancien `start`).
+- **Runs suivants** : seules les séances manquantes sont téléchargées, avec un recouvrement de 5 séances
+  pour détecter les révisions. Un split ou un dividende qui modifie l'historique ajusté déclenche une
+  réécriture complète du fichier, signalée dans le rapport (`history_rewritten`).
+- Seules les séances NYSE clôturées depuis au moins 30 minutes sont écrites (demi-séances comprises).
+- Un ticker à jour ne déclenche aucun appel réseau : relancer `th ingest` est sans effet.
+
+```bash
+uv run th ingest                                          # run quotidien
+uv run th ingest --symbols AAPL,MSFT                      # seulement ces symboles
+uv run th ingest --symbols AAPL --full                    # re-télécharge tout l'historique d'AAPL
+uv run th ingest --symbols AAPL --full --start 2015-01-01 # backfill depuis une date
+```
+
+`--full` **remplace** le fichier depuis `--start` (défaut : `start` de l'univers) ; c'est aussi le moyen
+de réparer un fichier corrompu, qu'un run ordinaire refuse d'écraser. Attention : un `--start` postérieur
+au début actuel du fichier tronque l'historique.
+
+Codes de sortie :
+
+| Code | Signification |
+|---|---|
+| `0` | Au moins un ticker mis à jour, ou rien à faire (jour férié, déjà à jour). |
+| `1` | Tous les tickers tentés ont échoué. |
+| `2` | Configuration ou arguments invalides (aucun appel réseau n'est fait). |
+
+Quand un fichier a été modifié ou qu'un ticker a échoué, `th ingest` ajoute une entrée à la section
+`ingest` du rapport `data/runs/{AAAA-MM-JJ}.json`, nommé d'après la dernière séance clôturée
+([contrat §6](specs/03-data-contracts.md)). Un run sans rien à signaler n'écrit aucun rapport.
+
+Le dossier de données est `data/` à la racine du dépôt, ou celui indiqué par la variable
+d'environnement `TH_DATA_DIR`.
 
 ### Configuration
 
-Toute commande charge et valide `config/universe.yaml`, `config/backtest.yaml` et `config/strategies.yaml`.
+Toute commande (sauf `th schemas`) charge et valide `config/universe.yaml`, `config/backtest.yaml` et `config/strategies.yaml`.
 Une configuration invalide arrête `th` avec le code de sortie **2** et un message indiquant
 le fichier, le champ et la raison, par exemple :
 

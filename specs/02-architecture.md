@@ -67,7 +67,7 @@ TradingHelper/
 │   ├── cli.py
 │   ├── config.py
 │   ├── schemas.py               # Modèles pydantic (source de vérité des contrats)
-│   ├── data/        ingest.py, storage.py, validate.py, calendar.py
+│   ├── data/        ingest.py, source.py, bars.py, storage.py, validate.py, calendar.py
 │   ├── features/    indicators.py, builder.py, labels.py
 │   ├── strategies/  base.py, buy_hold.py, random_trader.py, sma_cross.py, ml_classifier.py
 │   ├── backtest/    engine.py, costs.py, metrics.py, walk_forward.py

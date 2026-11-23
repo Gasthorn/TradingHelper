@@ -166,7 +166,7 @@
   - Fichiers : `src/tradinghelper/cli.py` (commande `ingest`, `_make_source`, `_now`, validation des options avant de construire la source, appel à `update_run_report` si `should_report`, résumé stdout).
   - Fini quand : tests verts ; `uv run th --help` liste `ingest` et `schemas` ; qualité verte.
 
-- [ ] **T18** [P] Documentation — R13, R17, R16
+- [x] **T18** [P] Documentation — R13, R17, R16
   - Tests : `tests/test_repo_hygiene.py::test_readme_documents_ingest_and_schemas` (sections/commandes présentes).
   - Fichiers :
     - `README.md` (commandes `th ingest` avec options et codes de sortie, `th schemas`, `TH_DATA_DIR`) ;

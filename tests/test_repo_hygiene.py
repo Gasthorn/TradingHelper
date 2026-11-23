@@ -182,6 +182,35 @@ def test_readme_documents_available_commands() -> None:
         assert command in readme, command
 
 
+def test_readme_documents_ingest_and_schemas() -> None:
+    """F01 (T18) : commandes `th ingest` / `th schemas`, options, codes de sortie, TH_DATA_DIR."""
+    readme = _readme()
+
+    for expected in (
+        "uv run th ingest",
+        "--symbols",
+        "--full",
+        "--start",
+        "uv run th schemas",
+        "TH_DATA_DIR",
+        "data/runs/",
+    ):
+        assert expected in readme, expected
+    for code in ("`0`", "`1`", "`2`"):
+        assert code in readme, code
+
+
+def test_docs_list_new_data_modules() -> None:
+    """F01 (plan, décision 1) : `data/source.py` est un module à effets de bord documenté."""
+    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    architecture = (REPO_ROOT / "specs" / "02-architecture.md").read_text(encoding="utf-8")
+
+    assert "data/source.py" in claude_md
+    assert "TH_DATA_DIR" in claude_md
+    assert "source.py" in architecture
+    assert "bars.py" in architecture
+
+
 def test_readme_mentions_dashboard_url_and_github_settings() -> None:
     readme = _readme()
 
