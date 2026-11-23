@@ -60,7 +60,7 @@
   - Fichiers : `dashboard/scripts/check-dist.mjs`, `dashboard/index.html` (titre, `<h1>`, bandeau statiques, `#app`), `dashboard/src/style.css`
   - Fini quand : `npm run build; npm run check:dist` passe sans `dashboard/public/data/` présent.
 
-- [ ] **T11** `base` Vite configurable — R14
+- [x] **T11** `base` Vite configurable — R14
   - Tests : extension de `check-dist.mjs` : si `TH_DASHBOARD_BASE` est défini, tous les `src`/`href` d'assets de `dist/index.html` commencent par cette valeur (doit échouer avant la modification de `vite.config.ts`)
   - Fichiers : `dashboard/vite.config.ts`, `dashboard/scripts/check-dist.mjs`
   - Fini quand : `$env:TH_DASHBOARD_BASE="/TradingHelper/"; npm run build; npm run check:dist` passe, et le build sans la variable passe aussi.
