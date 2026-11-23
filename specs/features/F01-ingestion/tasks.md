@@ -55,7 +55,7 @@
 
 ## Briques métier
 
-- [ ] **T8** [P] Calendrier NYSE — R7, R3
+- [x] **T8** [P] Calendrier NYSE — R7, R3
   - Tests :
     - `tests/data/test_calendar.py::test_sessions_exclude_weekends_and_holidays` (Thanksgiving 26/11/2026) ;
     - `::test_shift_back_5_sessions_skips_holidays` ;
