@@ -25,14 +25,25 @@ Une barre par ligne (P5). Format colonne-tableau compact.
   "columns": ["date", "open", "high", "low", "close", "adj_close", "volume"],
   "last_updated": "2026-11-23T22:41:05Z",
   "bars": [
-    ["2026-11-20", 228.10, 231.45, 227.80, 230.95, 230.95, 51234000],
-    ["2026-11-23", 231.00, 233.12, 229.60, 232.40, 232.40, 48765000]
+    ["2026-11-20", 228.1, 231.45, 227.8, 230.95, 229.7312, 51234000],
+    ["2026-11-23", 231.0, 233.12, 229.6, 232.4, 231.1734, 48765000]
   ]
 }
 ```
-Règles : dates strictement croissantes et uniques ; prix arrondis à 4 décimales ; `low <= open,close <= high` ;
-`volume >= 0`. Les splits/dividendes sont gérés via `adj_close` ; si yfinance réécrit l'historique ajusté,
-`th ingest` recalcule le fichier entier et le journalise dans le rapport de run (`history_rewritten: true`).
+Règles : dates de séance NYSE strictement croissantes et uniques ; prix `> 0` arrondis à 4 décimales ;
+`low <= min(open, close)` et `high >= max(open, close)` ; `volume` entier `>= 0`.
+
+Sémantique des colonnes (F01 R5, yfinance `auto_adjust=False`) : `open`, `high`, `low`, `close` sont ajustés des
+**splits uniquement** ; `adj_close` est ajusté des splits **et** des dividendes. Les features calculent le facteur
+`adj_close / close`. Si yfinance réécrit l'historique ajusté, `th ingest` recalcule le fichier entier et le journalise
+dans le rapport de run (`history_rewritten: true`, F01 R4).
+
+`last_updated` (UTC ISO-8601) ne change que lorsque `bars` change.
+
+**Sérialisation canonique** (idempotence et diffs, P5) : UTF-8, fins de ligne LF, saut de ligne final ; clés de premier
+niveau dans l'ordre ci-dessus, indentation de 2 espaces ; **une barre par ligne**, sur une seule ligne, éléments séparés
+par `", "` ; flottants écrits sous leur représentation la plus courte après arrondi à 4 décimales (`228.1`, pas `228.10`),
+volume en entier. Deux sérialisations d'un même contenu sont identiques octet pour octet.
 
 ## 3. Portefeuille fictif — `data/portfolios/{strategy_id}.json`
 ```json
@@ -94,7 +105,33 @@ Invariant : `cash + Σ(qty × close) == equity_curve[-1].value` (à 1e-6 près).
 `status ∈ {candidate, champion, retired}` — une seule `champion` par `family`.
 
 ## 6. Rapport de run — `data/runs/{YYYY-MM-DD}.json`
-Statut par étape, tickers en échec, nombre de barres ajoutées, durée, avertissements qualité.
+Nommé d'après la **dernière séance clôturée** `S` (et non la date UTC du run, le cron pouvant passer minuit).
+Une section par étape ; chaque commande lit le fichier, met à jour **sa seule section** et le réécrit atomiquement.
+Modèle pydantic `RunReport` dans `schemas.py`. Section `ingest` (F01 R15) = liste d'exécutions :
+```json
+{
+  "schema_version": 1,
+  "session_date": "2026-11-23",
+  "ingest": [
+    {
+      "started_at": "2026-11-23T22:31:02Z",
+      "finished_at": "2026-11-23T22:32:10Z",
+      "duration_s": 68.4,
+      "args": { "symbols": null, "full": false, "start": null },
+      "exit_code": 0,
+      "tickers": [
+        { "symbol": "AAPL", "status": "ok", "mode": "incremental", "bars_added": 1, "bars_revised": 0,
+          "history_rewritten": false, "rewrite_reason": null, "attempts": 1, "error": null },
+        { "symbol": "MSFT", "status": "failed", "mode": "incremental", "bars_added": 0, "bars_revised": 0,
+          "history_rewritten": false, "rewrite_reason": null, "attempts": 4, "error": "HTTP 429" }
+      ],
+      "warnings": [{ "symbol": "NVDA", "date": "2026-11-22", "rule": "non_session_date" }]
+    }
+  ]
+}
+```
+`status ∈ {ok, unchanged, failed}` ; `mode ∈ {initial, incremental, full}` ; `rewrite_reason ∈ {revision, backfill, null}`.
+Les sections des autres étapes (`validate` pour F02, etc.) sont définies par leurs features.
 
 ## 7. Export dashboard — `dashboard/public/data/` (non commité)
 | Fichier | Contenu | Taille cible |

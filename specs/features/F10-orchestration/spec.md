@@ -32,6 +32,8 @@
 ## Exigences
 - **R1** Chaque workflow DOIT déclarer des `permissions` minimales explicites.
 - **R2** Le commit DOIT être fait par `github-actions[bot]` et seulement s'il y a un diff (`git diff --quiet || …`).
+  QUAND le rapport de run contient au moins un ticker avec `history_rewritten: true`, le message de commit DOIT le mentionner
+  (ex. `data: daily update 2026-11-23 (history rewrite: AAPL, MSFT)`) : c'est la journalisation explicite exigée par P5 (F01 R4).
 - **R3** Le push DOIT faire `git pull --rebase` avant, avec 3 tentatives.
 - **R4** QUAND une étape échoue, le workflow DOIT quand même téléverser `data/runs/{date}.json` comme artefact et échouer visiblement (notification GitHub standard).
 - **R5** Les actions tierces DOIVENT être épinglées par SHA de commit.

@@ -13,7 +13,7 @@ Détecter les données corrompues ou suspectes avant qu'elles n'alimentent les m
 - **R3** Le système DOIT appliquer les règles d'avertissement : séance manquante vs calendrier NYSE ; variation journalière > 40 % ; volume nul ; dernière barre plus vieille que 3 séances (« stale »).
 - **R4** QUAND une règle bloquante échoue, `th validate` DOIT sortir en code 1 et le workflow NE DOIT PAS commiter.
 - **R5** Le système DOIT écrire le résultat dans la section `validate` du rapport de run et dans l'export `health.json`.
-- **R6** `th schemas` DOIT générer `schemas/*.schema.json` depuis `schemas.py` ; la CI DOIT échouer si les fichiers générés diffèrent de ceux commités.
+- **R6** `th schemas` (commande créée par F01 R17) DOIT générer `schemas/*.schema.json` depuis `schemas.py` pour tous les contrats ; la CI DOIT échouer si les fichiers générés diffèrent de ceux commités.
 
 ## Critères d'acceptation
 - [ ] Fixtures « fichier corrompu » (date dupliquée, high < low) → code 1 avec message pointant ticker + date.
