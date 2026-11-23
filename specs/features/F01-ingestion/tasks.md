@@ -139,7 +139,7 @@
   - Fichiers : `src/tradinghelper/data/ingest.py` (mode incrémental : `clean_bars`, `needs_rewrite`, re-fetch complet, `merge_overlap`).
   - Fini quand : tests verts.
 
-- [ ] **T16** Backfill `full`, filtre `symbols`, code de sortie et rapport — R13, R14, R15
+- [x] **T16** Backfill `full`, filtre `symbols`, code de sortie et rapport — R13, R14, R15
   - Tests :
     - `tests/data/test_ingest.py::test_full_backfill_rewrites_only_requested_symbols` (`rewrite_reason="backfill"`, 1re barre = 1re séance ≥ `start`) ;
     - `::test_full_without_start_uses_universe_start` ;

@@ -117,6 +117,21 @@ def _targets(universe: UniverseConfig) -> list[tuple[str, date]]:
     return targets
 
 
+def _select(
+    targets: list[tuple[str, date]], symbols: tuple[str, ...] | None
+) -> list[tuple[str, date]]:
+    """Restreint la cible à `symbols` (ordre de l'univers) ; symbole inconnu : `ValueError`
+    (la CLI le vérifie avant, R13)."""
+    if symbols is None:
+        return targets
+    known = {symbol for symbol, _ in targets}
+    unknown = [symbol for symbol in symbols if symbol not in known]
+    if unknown:
+        raise ValueError(f"symboles hors univers et hors benchmark : {', '.join(unknown)}")
+    wanted = set(symbols)
+    return [(symbol, start) for symbol, start in targets if symbol in wanted]
+
+
 @dataclass(frozen=True)
 class _Plan:
     """Ticker à télécharger."""
@@ -182,17 +197,24 @@ class _Ingestion:
         self.warnings: list[IngestWarning] = []
         self.changed = False
 
-    def plan(self, symbol: str, start: date) -> _Plan | IngestTickerResult:
+    def plan(self, symbol: str, start: date, request: IngestRequest) -> _Plan | IngestTickerResult:
         try:
             stored = read_prices(prices_path(self.data_root, symbol))
         except PricesFileError as exc:
-            # R9 : un fichier illisible n'est jamais écrasé par un run ordinaire.
-            return _result(
-                symbol,
-                "failed",
-                None,
-                error=f"{exc} — réparer avec `th ingest --symbols {symbol} --full`",
-            )
+            if not request.full:
+                # R9 : un fichier illisible n'est jamais écrasé par un run ordinaire.
+                return _result(
+                    symbol,
+                    "failed",
+                    None,
+                    error=f"{exc} — réparer avec `th ingest --symbols {symbol} --full`",
+                )
+            stored = None  # le backfill `--full` est le moyen de le réparer (R13)
+        if request.full:
+            full_start = request.start or start
+            if full_start > self.session:
+                return _result(symbol, "unchanged", None)
+            return _Plan(symbol, "full", full_start, stored, start)
         if stored is None or not stored.bars:
             if start > self.session:
                 return _result(symbol, "unchanged", None)
@@ -261,12 +283,15 @@ class _Ingestion:
                 error="aucune barre valide dans la réponse",
             )
         self.write(plan.symbol, cleaned.bars)
+        old = {bar[0]: bar for bar in plan.stored.bars} if plan.stored is not None else {}
         return _result(
             plan.symbol,
             "ok",
             plan.mode,
             attempts=fetched.attempts,
-            bars_added=len(cleaned.bars),
+            bars_added=sum(1 for bar in cleaned.bars if bar[0] not in old),
+            bars_revised=sum(1 for bar in cleaned.bars if bar[0] in old and old[bar[0]] != bar),
+            rewrite_reason="backfill" if plan.mode == "full" else None,
         )
 
     def clean(self, symbol: str, raw: Sequence[RawBar]) -> Cleaned:
@@ -369,7 +394,8 @@ def ingest(
     )
 
     planned: list[_Plan | IngestTickerResult] = [
-        run.plan(symbol, start) for symbol, start in _targets(universe)
+        run.plan(symbol, start, request)
+        for symbol, start in _select(_targets(universe), request.symbols)
     ]
     fetched = run.fetch([p for p in planned if isinstance(p, _Plan)])
     results = [run.process(p, fetched[p.symbol]) if isinstance(p, _Plan) else p for p in planned]

@@ -19,6 +19,7 @@ from tradinghelper.data.ingest import (
     IngestOutcome,
     IngestRequest,
     RetryError,
+    exit_code,
     ingest,
     with_retry,
 )
@@ -655,3 +656,165 @@ def test_dirty_response_writes_only_valid_bars(env: _Env) -> None:
         ("2026-11-20", "nan"),
         ("2026-11-22", "non_session_date"),
     ]
+
+
+# --- Backfill `full`, filtre `symbols`, code de sortie et rapport (R13, R14, R15) ---------------
+
+
+def _snapshot(env: _Env, *symbols: str) -> dict[str, bytes]:
+    return {symbol: env.file(symbol).read_bytes() for symbol in symbols}
+
+
+def test_full_backfill_rewrites_only_requested_symbols(env: _Env) -> None:
+    _initial(env, UNIVERSE)
+    others = _snapshot(env, "MSFT", "SPY")
+    env.clock.now = _at(24, 23)
+
+    outcome = env.run(request=IngestRequest(symbols=("AAPL",), full=True, start=date(2026, 10, 15)))
+
+    assert [r.symbol for r in outcome.run.tickers] == ["AAPL"]
+    aapl = _results(outcome)["AAPL"]
+    assert (aapl.status, aapl.mode) == ("ok", "full")
+    assert (aapl.history_rewritten, aapl.rewrite_reason) == (True, "backfill")
+    assert env.source.calls == [(("AAPL",), date(2026, 10, 15), S)]
+    prices = read_prices(env.file("AAPL"))
+    assert prices is not None
+    assert prices.bars[0][0] == date(2026, 10, 15)  # 1re séance >= --start
+    assert prices.bars[-1][0] == S
+    assert _snapshot(env, "MSFT", "SPY") == others
+    assert outcome.changed is True
+
+
+def test_full_without_start_uses_universe_start_and_repairs_corrupted_file(env: _Env) -> None:
+    corrupted = env.file("AAPL")
+    corrupted.parent.mkdir(parents=True)
+    corrupted.write_bytes(b"{corrompu")
+
+    outcome = env.run(request=IngestRequest(symbols=("AAPL",), full=True))
+
+    aapl = _results(outcome)["AAPL"]
+    assert (aapl.status, aapl.mode, aapl.rewrite_reason) == ("ok", "full", "backfill")
+    prices = read_prices(env.file("AAPL"))
+    assert prices is not None
+    assert prices.bars[0][0] == CAL.sessions(date(2026, 10, 1), S)[0]
+
+
+def test_full_backfill_counts_added_and_revised(env: _Env) -> None:
+    _initial(env)
+    env.source.data["AAPL"] = [
+        RawBar(b.date, b.open, b.high, b.low, b.close, b.adj_close, 3.0)
+        if b.date == date(2026, 11, 20)
+        else b
+        for b in env.source.data["AAPL"]
+    ]
+
+    outcome = env.run(SOLO, IngestRequest(full=True, start=date(2026, 9, 1)))
+
+    aapl = _results(outcome)["AAPL"]
+    assert aapl.bars_added == len(CAL.sessions(date(2026, 9, 1), date(2026, 9, 30)))
+    assert aapl.bars_revised == 1
+
+
+def test_full_benchmark_uses_benchmark_start(env: _Env) -> None:
+    env.run(request=IngestRequest(symbols=("SPY",), full=True))
+
+    assert env.source.calls == [(("SPY",), date(2026, 9, 1), S)]
+
+
+def test_symbols_filter_without_full_is_incremental(env: _Env) -> None:
+    _initial(env, UNIVERSE)
+    env.clock.now = _at(25)
+
+    outcome = env.run(request=IngestRequest(symbols=("MSFT",)))
+
+    assert [(r.symbol, r.mode) for r in outcome.run.tickers] == [("MSFT", "incremental")]
+    assert [call[0] for call in env.source.calls] == [("MSFT",)]
+
+
+def test_unknown_symbol_in_request_raises(env: _Env) -> None:
+    with pytest.raises(ValueError, match="XOM"):
+        env.run(request=IngestRequest(symbols=("XOM",)))
+    assert env.source.calls == []
+
+
+def _ticker_result(status: str, attempts: int) -> IngestTickerResult:
+    return IngestTickerResult(
+        symbol="AAPL",
+        status=status,  # type: ignore[arg-type]
+        mode=None if attempts == 0 else "incremental",
+        bars_added=0,
+        bars_revised=0,
+        history_rewritten=False,
+        rewrite_reason=None,
+        attempts=attempts,
+        error="boom" if status == "failed" else None,
+    )
+
+
+@pytest.mark.parametrize(
+    ("results", "expected"),
+    [
+        ([("failed", 4), ("failed", 5)], 1),
+        ([("failed", 4), ("ok", 1)], 0),
+        ([("unchanged", 0), ("unchanged", 0)], 0),
+        ([("failed", 0), ("unchanged", 0)], 0),
+        ([("failed", 0), ("failed", 4)], 1),
+        ([], 0),
+    ],
+    ids=[
+        "all_attempted_failed",
+        "partial",
+        "none_attempted",
+        "corrupted_only_not_attempted",
+        "corrupted_plus_attempted_failed",
+        "empty",
+    ],
+)
+def test_exit_code(results: list[tuple[str, int]], expected: int) -> None:
+    assert exit_code([_ticker_result(status, attempts) for status, attempts in results]) == expected
+
+
+def test_should_report_when_changed(env: _Env) -> None:
+    assert env.run().should_report is True
+
+
+def test_should_report_when_failed_without_change(env: _Env) -> None:
+    env.source.always_fail.update({"AAPL", "MSFT", "SPY"})
+
+    outcome = env.run()
+
+    assert outcome.changed is False
+    assert outcome.should_report is True
+    assert outcome.run.exit_code == 1
+
+
+def test_should_not_report_when_nothing_happened(env: _Env) -> None:
+    env.run()
+
+    assert env.run().should_report is False
+
+
+def test_ingest_run_fields(env: _Env) -> None:
+    times = iter([NOW, NOW + timedelta(seconds=42)])
+    request = IngestRequest(symbols=("AAPL", "SPY"), full=True, start=date(2026, 11, 2))
+
+    outcome = ingest(
+        UNIVERSE,
+        request,
+        source=env.source,
+        calendar=CAL,
+        now=lambda: next(times, NOW + timedelta(seconds=42)),
+        sleep=env.sleep,
+        data_root=env.root,
+    )
+
+    run = outcome.run
+    assert run.started_at == NOW
+    assert run.finished_at == NOW + timedelta(seconds=42)
+    assert run.duration_s == 42.0
+    assert run.args.model_dump() == {
+        "symbols": ["AAPL", "SPY"],
+        "full": True,
+        "start": date(2026, 11, 2),
+    }
+    assert [r.symbol for r in run.tickers] == ["AAPL", "SPY"]
