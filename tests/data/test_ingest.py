@@ -818,3 +818,44 @@ def test_ingest_run_fields(env: _Env) -> None:
         "start": date(2026, 11, 2),
     }
     assert [r.symbol for r in run.tickers] == ["AAPL", "SPY"]
+
+
+# --- Compléments ajoutés à la vérification (/spec-verify) --------------------------------------
+
+
+def test_new_ticker_downloads_full_history_only_for_it(env: _Env) -> None:
+    """Critère 2 : un ticker ajouté à l'univers est téléchargé depuis son `start` ;
+    les fichiers existants ne changent pas."""
+    _initial(env, UNIVERSE)
+    snapshot = {s: env.file(s).read_bytes() for s in ("AAPL", "MSFT", "SPY")}
+    env.source.data.update(_history("NVDA"))
+    bigger = _universe(
+        ("AAPL", date(2026, 10, 1)), ("MSFT", date(2026, 9, 1)), ("NVDA", date(2026, 8, 3))
+    )
+    env.clock.now = _at(24, 23)  # même séance S = 24/11
+
+    outcome = env.run(bigger)
+
+    nvda = _results(outcome)["NVDA"]
+    assert (nvda.status, nvda.mode) == ("ok", "initial")
+    prices = read_prices(env.file("NVDA"))
+    assert prices is not None
+    assert prices.bars[0][0] == date(2026, 8, 3)
+    assert prices.bars[-1][0] == S
+    # Le benchmark démarre désormais au 3 août, mais son fichier existant n'est pas réécrit.
+    assert {s: env.file(s).read_bytes() for s in ("AAPL", "MSFT", "SPY")} == snapshot
+    assert [call[0] for call in env.source.calls] == [("NVDA",)]
+
+
+def test_half_day_bar_written_after_early_close(env: _Env) -> None:
+    """Critère 9 : demi-séance du 27/11/2026 (clôture 13 h ET), barre écrite à 13 h 45 ET."""
+    _initial(env, day=25)
+    env.clock.now = datetime(2026, 11, 27, 18, 45, tzinfo=UTC)  # 13 h 45 ET
+
+    outcome = env.run(SOLO)
+
+    assert outcome.session == date(2026, 11, 27)
+    prices = read_prices(env.file("AAPL"))
+    assert prices is not None
+    assert prices.bars[-1][0] == date(2026, 11, 27)
+    assert _results(outcome)["AAPL"].bars_added == 1

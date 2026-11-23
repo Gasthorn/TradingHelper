@@ -1,6 +1,6 @@
 # F01 — Ingestion quotidienne des cours (yFinance)
 
-- **Statut** : 🚧 In progress
+- **Statut** : 🔍 Verifying (20/20 critères prouvés le 2026-11-24 ; reste la CI verte sur la PR)
 - **Milestone** : M1
 - **Dépend de** : F00
 - **Contrats** : `03-data-contracts.md` §1, §2, §6
@@ -92,26 +92,26 @@ de façon incrémentale, atomique, idempotente et diffable dans `data/raw/prices
   Le contrôle de synchronisation en CI reste dans F02 R6.
 
 ## Critères d'acceptation
-- [ ] Avec une `FakePriceSource` et sans `data/raw/prices/`, un run initial crée un fichier par ticker + `SPY.json`, conformes au JSON Schema `prices` et à la sérialisation canonique. (R1, R2, R8, R17)
-- [ ] Ajouter un ticker à l'univers → son fichier est créé depuis `start`, les autres fichiers ne changent pas. (R2, R3)
-- [ ] Un 2e run pour la même `S` ne fait aucun appel à la source et ne modifie aucun fichier (`git diff` vide, pas de rapport écrit). (R3, R8, R15)
-- [ ] Un run après une nouvelle séance ajoute exactement 1 ligne par ticker ; après 3 séances manquées, exactement 3 lignes. (R3)
-- [ ] Une barre du recouvrement modifiée sur le volume seul est remplacée (`bars_revised = 1`) sans réécriture complète. (R3)
-- [ ] Une révision simulée d'`adj_close` de 0,3 % (dividende) déclenche une réécriture complète et `history_rewritten: true`. (R4)
-- [ ] Un échec du re-téléchargement complet laisse l'ancien fichier identique octet pour octet. (R4, R8)
-- [ ] Une réponse contenant NaN, un week-end, une date dupliquée et `high < low` : seules les barres valides sont écrites, avertissements listés. (R5, R6)
-- [ ] `now_utc` = 15 h ET un jour de séance → pas de barre du jour ; 27/11/2026 13 h 45 ET (demi-séance) → barre écrite. (R7)
-- [ ] Une exception simulée pendant l'écriture laisse le fichier d'origine intact. (R8)
-- [ ] Un fichier existant corrompu n'est pas écrasé ; ticker en échec avec message `--full`. (R9)
-- [ ] Source échouant 2 fois puis réussissant → ticker OK, attentes 2 s et 4 s observées ; 4 échecs → ticker KO, attentes 2, 4, 8 s. (R10)
-- [ ] 45 tickers de même date de début → 3 appels par lot ; un ticker vide dans un lot est retenté seul. (R11)
-- [ ] `BRK.B` est demandé à la source en `BRK-B` et stocké dans `BRK.B.json`. (R12)
-- [ ] `th ingest --symbols AAPL --full --start 2015-01-01` ne réécrit que `AAPL.json`, qui commence à la 1re séance ≥ 2015-01-01. (R13)
-- [ ] `--start` sans `--full`, symbole inconnu → code 2, aucun appel à la source. (R13, R14)
-- [ ] Une exception sur 1 ticker sur 3 : les 2 autres sont écrits, code 0, ticker en erreur listé dans le rapport. (R10, R14, R15)
-- [ ] Tous les tickers tentés en échec → code 1. (R14)
-- [ ] Un run un jour férié NYSE ne fait aucun appel et ne produit aucun changement. (R3, R15)
-- [ ] Le rapport respecte le JSON Schema `run_report` ; une 2e entrée `ingest` (backfill) s'ajoute sans effacer la 1re ni les autres sections. (R15, R17)
+- [x] Avec une `FakePriceSource` et sans `data/raw/prices/`, un run initial crée un fichier par ticker + `SPY.json`, conformes au JSON Schema `prices` et à la sérialisation canonique. (R1, R2, R8, R17) — Preuve : `test_ingest.py::test_initial_run_creates_all_files_including_benchmark` ; JSON Schema vérifié par `jsonschema` (Draft 2020-12) sur les fichiers produits, et `test_schemas.py::test_generated_schemas_match_committed`.
+- [x] Ajouter un ticker à l'univers → son fichier est créé depuis `start`, les autres fichiers ne changent pas. (R2, R3) — Preuve : `test_ingest.py::test_new_ticker_downloads_full_history_only_for_it` (ajouté à la vérification).
+- [x] Un 2e run pour la même `S` ne fait aucun appel à la source et ne modifie aucun fichier (`git diff` vide, pas de rapport écrit). (R3, R8, R15) — Preuve : `test_ingest.py::test_second_run_same_session_makes_no_call_and_no_change`, `test_cli_ingest.py::test_no_report_on_holiday_or_second_run` ; réel : T19, 2e run sans appel, SHA-256 identiques.
+- [x] Un run après une nouvelle séance ajoute exactement 1 ligne par ticker ; après 3 séances manquées, exactement 3 lignes. (R3) — Preuve : `test_ingest.py::test_one_new_session_adds_one_line`, `test_ingest.py::test_three_missed_sessions_add_three_lines` (lignes de barres ; le diff git montre aussi `last_updated` et la virgule de l'ancienne dernière barre).
+- [x] Une barre du recouvrement modifiée sur le volume seul est remplacée (`bars_revised = 1`) sans réécriture complète. (R3) — Preuve : `test_ingest.py::test_overlap_volume_revision_replaced_without_rewrite`.
+- [x] Une révision simulée d'`adj_close` de 0,3 % (dividende) déclenche une réécriture complète et `history_rewritten: true`. (R4) — Preuve : `test_ingest.py::test_revision_triggers_full_rewrite`, `test_bars.py::test_needs_rewrite_on_dividend_adj_close_change`.
+- [x] Un échec du re-téléchargement complet laisse l'ancien fichier identique octet pour octet. (R4, R8) — Preuve : `test_ingest.py::test_failed_rewrite_keeps_old_file_bytes`.
+- [x] Une réponse contenant NaN, un week-end, une date dupliquée et `high < low` : seules les barres valides sont écrites, avertissements listés. (R5, R6) — Preuve : `test_ingest.py::test_dirty_response_writes_only_valid_bars`, `test_bars.py::test_drops_invalid_bars[...]` (13 cas, dont `high_lt_low`).
+- [x] `now_utc` = 15 h ET un jour de séance → pas de barre du jour ; 27/11/2026 13 h 45 ET (demi-séance) → barre écrite. (R7) — Preuve : `test_ingest.py::test_no_bar_for_unclosed_session`, `test_ingest.py::test_half_day_bar_written_after_early_close` (ajouté à la vérification), `test_calendar.py::test_last_closed_session[...]`.
+- [x] Une exception simulée pendant l'écriture laisse le fichier d'origine intact. (R8) — Preuve : `test_storage.py::test_atomic_write_failure_keeps_original`.
+- [x] Un fichier existant corrompu n'est pas écrasé ; ticker en échec avec message `--full`. (R9) — Preuve : `test_ingest.py::test_corrupted_file_not_overwritten_and_message_mentions_full`.
+- [x] Source échouant 2 fois puis réussissant → ticker OK, attentes 2 s et 4 s observées ; 4 échecs → ticker KO, attentes 2, 4, 8 s. (R10) — Preuve : `test_ingest.py::test_with_retry_succeeds_after_two_failures`, `test_ingest.py::test_with_retry_gives_up_after_four_attempts`.
+- [x] 45 tickers de même date de début → 3 appels par lot ; un ticker vide dans un lot est retenté seul. (R11) — Preuve : `test_ingest.py::test_45_tickers_same_start_make_3_batch_calls`, `test_ingest.py::test_ticker_missing_from_batch_retried_alone`.
+- [x] `BRK.B` est demandé à la source en `BRK-B` et stocké dans `BRK.B.json`. (R12) — Preuve : `test_source.py::test_dot_symbol_mapped_to_dash`, `test_ingest.py::test_dot_symbol_stored_under_config_name`.
+- [x] `th ingest --symbols AAPL --full --start 2015-01-01` ne réécrit que `AAPL.json`, qui commence à la 1re séance ≥ 2015-01-01. (R13) — Preuve : `test_cli_ingest.py::test_full_backfill_rewrites_only_target` (avec `--start 2026-10-15` sur données simulées).
+- [x] `--start` sans `--full`, symbole inconnu → code 2, aucun appel à la source. (R13, R14) — Preuve : `test_cli_ingest.py::test_invalid_arguments_exit_2_without_call[...]` (6 cas).
+- [x] Une exception sur 1 ticker sur 3 : les 2 autres sont écrits, code 0, ticker en erreur listé dans le rapport. (R10, R14, R15) — Preuve : `test_cli_ingest.py::test_partial_failure_exits_0`, `test_ingest.py::test_one_failing_ticker_does_not_block_others`.
+- [x] Tous les tickers tentés en échec → code 1. (R14) — Preuve : `test_cli_ingest.py::test_all_failed_exits_1`.
+- [x] Un run un jour férié NYSE ne fait aucun appel et ne produit aucun changement. (R3, R15) — Preuve : `test_cli_ingest.py::test_holiday_run_after_up_to_date_makes_no_change`.
+- [x] Le rapport respecte le JSON Schema `run_report` ; une 2e entrée `ingest` (backfill) s'ajoute sans effacer la 1re ni les autres sections. (R15, R17) — Preuve : `test_cli_ingest.py::test_full_backfill_rewrites_only_target` (2 entrées), `test_storage.py::test_update_report_preserves_other_sections` ; JSON Schema `run_report` vérifié par `jsonschema`.
 
 ## Dépendances introduites (à justifier dans `plan.md`)
 `yfinance`, `pandas`, `pandas_market_calendars` (calendrier NYSE avec demi-séances, cf. `02-architecture.md`).
