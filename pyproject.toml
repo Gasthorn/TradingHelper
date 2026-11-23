@@ -6,6 +6,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
+    "pydantic>=2.14.4",
     "pyyaml>=6.0.4",
     "typer>=0.29.2",
 ]
@@ -39,8 +40,10 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "N", "PT", "FA"]
 
 [tool.ruff.lint.isort]
 required-imports = ["from __future__ import annotations"]
+known-local-folder = ["conftest"]
 
 [tool.mypy]
+plugins = ["pydantic.mypy"]
 python_version = "3.12"
 strict = true
 files = ["src"]
@@ -49,5 +52,7 @@ exclude = ["^research/"]
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
+# Permet d'importer les constantes de tests/conftest.py (mode importlib).
+pythonpath = ["tests"]
 # --disable-socket : aucun appel réseau dans les tests (R4, CLAUDE.md).
 addopts = ["--import-mode=importlib", "-ra", "--strict-markers", "--disable-socket"]

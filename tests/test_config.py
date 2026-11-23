@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import copy
+from collections.abc import Callable
+from datetime import date
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from tradinghelper.config import ConfigError, _read_yaml
+from tradinghelper.config import ConfigError, UniverseConfig, _read_yaml, _validate
+
+from conftest import TODAY, VALID_UNIVERSE, WriteConfig
 
 # --- ConfigError ---------------------------------------------------------------------------------
 
@@ -78,3 +84,88 @@ def test_read_yaml_duplicate_key_names_field(tmp_path: Path) -> None:
         _read_yaml(path)
 
     assert excinfo.value.field == "slippage_bps"
+
+
+# --- UniverseConfig (R6, R8) ----------------------------------------------------------------------
+
+
+def _load_universe(config_dir: Path, today: date = TODAY) -> UniverseConfig:
+    path = config_dir / "universe.yaml"
+    return _validate(UniverseConfig, _read_yaml(path), path, today)
+
+
+def _universe(**changes: Any) -> dict[str, Any]:
+    data = copy.deepcopy(VALID_UNIVERSE)
+    data.update(changes)
+    return data
+
+
+def _universe_ticker(index: int, **changes: Any) -> dict[str, Any]:
+    data = copy.deepcopy(VALID_UNIVERSE)
+    data["tickers"][index].update(changes)
+    return data
+
+
+def _universe_without(index: int, key: str) -> dict[str, Any]:
+    data = copy.deepcopy(VALID_UNIVERSE)
+    del data["tickers"][index][key]
+    return data
+
+
+def test_valid_universe_loads(write_config: WriteConfig) -> None:
+    universe = _load_universe(write_config())
+
+    assert universe.currency == "USD"
+    assert universe.benchmark == "SPY"
+    assert [t.symbol for t in universe.tickers] == ["AAPL", "MSFT", "BRK-B"]
+    assert universe.tickers[0].start == date(2010, 1, 1)
+
+
+def test_universe_start_today_is_accepted(write_config: WriteConfig) -> None:
+    universe = _load_universe(write_config(universe=_universe_ticker(0, start=TODAY)))
+
+    assert universe.tickers[0].start == TODAY
+
+
+INVALID_UNIVERSES: list[tuple[str, Callable[[], dict[str, Any]], str]] = [
+    ("cle-inconnue", lambda: _universe(exchange="NYSE"), "exchange"),
+    ("cle-inconnue-ticker", lambda: _universe_ticker(0, isin="US0378331005"), "tickers[0].isin"),
+    ("champ-manquant", lambda: _universe_without(0, "name"), "tickers[0].name"),
+    ("tickers-vide", lambda: _universe(tickers=[]), "tickers"),
+    ("symbole-duplique", lambda: _universe_ticker(2, symbol="AAPL"), "tickers"),
+    ("symbole-minuscules", lambda: _universe_ticker(1, symbol="msft"), "tickers[1].symbol"),
+    ("symbole-trop-long", lambda: _universe_ticker(1, symbol="ABCDEFGHIJK"), "tickers[1].symbol"),
+    ("benchmark-invalide", lambda: _universe(benchmark="s&p"), "benchmark"),
+    ("start-invalide", lambda: _universe_ticker(0, start="2010-13-45"), "tickers[0].start"),
+    ("start-future", lambda: _universe_ticker(0, start=date(2026, 11, 24)), "tickers[0].start"),
+    ("devise-eur", lambda: _universe(currency="EUR"), "currency"),
+]
+
+
+@pytest.mark.parametrize(
+    ("make_data", "expected_field"),
+    [(make, field) for _, make, field in INVALID_UNIVERSES],
+    ids=[case_id for case_id, _, _ in INVALID_UNIVERSES],
+)
+def test_invalid_universe(
+    write_config: WriteConfig, make_data: Callable[[], dict[str, Any]], expected_field: str
+) -> None:
+    config_dir = write_config(universe=make_data())
+    path = config_dir / "universe.yaml"
+
+    with pytest.raises(ConfigError) as excinfo:
+        _load_universe(config_dir)
+
+    err = excinfo.value
+    assert err.file == path
+    assert err.field == expected_field
+    assert path.as_posix() in str(err)
+    assert f": {expected_field}: " in str(err)
+    assert err.reason
+
+
+def test_duplicate_symbol_reason_names_symbol(write_config: WriteConfig) -> None:
+    config_dir = write_config(universe=_universe_ticker(2, symbol="AAPL"))
+
+    with pytest.raises(ConfigError, match="AAPL"):
+        _load_universe(config_dir)

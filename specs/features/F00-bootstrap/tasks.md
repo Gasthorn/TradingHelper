@@ -28,7 +28,7 @@
   - Fichiers : `src/tradinghelper/config.py` (`ConfigError`, `_read_yaml` avec `SafeLoader` rejetant les clés dupliquées), `pyproject.toml` (`pyyaml`, dev `types-PyYAML`), `uv.lock`, `tests/test_config.py`
   - Fini quand : tests verts sous `--disable-socket` ; `mypy --strict src/` passe.
 
-- [ ] **T5** Modèle `UniverseConfig` et ses règles — R6, R8
+- [x] **T5** Modèle `UniverseConfig` et ses règles — R6, R8
   - Tests : `tests/test_config.py::test_invalid_universe[...]` paramétré : clé inconnue, `tickers` vide, symbole dupliqué, symbole hors motif, `start` invalide, `start` future (avec `today` injecté), `currency` ≠ USD — chaque cas vérifie fichier **et** champ (ex. `tickers[3].symbol`) dans le message
   - Fichiers : `src/tradinghelper/config.py` (`_Strict`, `TickerConfig`, `UniverseConfig`, `_validate` qui convertit `ValidationError` en `ConfigError`), `tests/conftest.py` (fixture `write_config(tmp_path, **overrides)`), `pyproject.toml` (`pydantic`, plugin mypy pydantic), `uv.lock`
   - Fini quand : tests verts ; `mypy --strict src/` passe avec le plugin pydantic.

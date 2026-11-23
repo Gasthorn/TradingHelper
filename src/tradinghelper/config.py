@@ -5,10 +5,25 @@ Aucun appel réseau ici (R9) : la validation porte uniquement sur le contenu des
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
+from typing import Annotated, Literal
 
 import yaml
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+)
 from yaml.nodes import MappingNode
+
+SYMBOL_PATTERN = r"^[A-Z][A-Z0-9.\-]{0,9}$"
+
+Symbol = Annotated[str, StringConstraints(pattern=SYMBOL_PATTERN)]
 
 
 class ConfigError(Exception):
@@ -68,3 +83,68 @@ def _read_yaml(path: Path) -> dict[str, object]:
     if not isinstance(data, dict):
         raise ConfigError(path, None, f"la racine doit être un mapping, pas {type(data).__name__}")
     return {str(k): v for k, v in data.items()}
+
+
+# --- Modèles ------------------------------------------------------------------------------------
+
+
+class _Strict(BaseModel):
+    """Base commune : clés inconnues refusées (R8), objets immuables."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class TickerConfig(_Strict):
+    symbol: Symbol
+    name: str
+    sector: str
+    start: date
+
+    @field_validator("start")
+    @classmethod
+    def _start_not_in_future(cls, value: date, info: ValidationInfo) -> date:
+        context = info.context if isinstance(info.context, dict) else {}
+        today = context.get("today", date.today())
+        if value > today:
+            raise ValueError(f"date de début {value.isoformat()} postérieure à aujourd'hui")
+        return value
+
+
+class UniverseConfig(_Strict):
+    currency: Literal["USD"]  # v1 : USD uniquement (vision)
+    benchmark: Symbol
+    tickers: Annotated[list[TickerConfig], Field(min_length=1)]
+
+    @field_validator("tickers")
+    @classmethod
+    def _unique_symbols(cls, tickers: list[TickerConfig]) -> list[TickerConfig]:
+        first_index: dict[str, int] = {}
+        for index, ticker in enumerate(tickers):
+            key = ticker.symbol.casefold()
+            if key in first_index:
+                raise ValueError(
+                    f"symbole dupliqué {ticker.symbol!r} (positions {first_index[key]} et {index})"
+                )
+            first_index[key] = index
+        return tickers
+
+
+# --- Validation ---------------------------------------------------------------------------------
+
+
+def _format_loc(loc: tuple[int | str, ...]) -> str | None:
+    """('tickers', 3, 'symbol') -> 'tickers[3].symbol'."""
+    out = ""
+    for part in loc:
+        out += f"[{part}]" if isinstance(part, int) else (f".{part}" if out else part)
+    return out or None
+
+
+def _validate[M: BaseModel](model: type[M], data: object, file: Path, today: date) -> M:
+    """Valide `data` contre `model` ; convertit la 1re erreur pydantic en `ConfigError`."""
+    try:
+        return model.model_validate(data, context={"today": today})
+    except ValidationError as exc:
+        error = exc.errors(include_url=False)[0]
+        reason = str(error["msg"]).removeprefix("Value error, ")
+        raise ConfigError(file, _format_loc(tuple(error["loc"])), reason) from None
