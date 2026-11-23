@@ -11,14 +11,37 @@ import contextlib
 import json
 import os
 import tempfile
-from datetime import UTC
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
 
-from tradinghelper.schemas import Bar, PricesFile
+from tradinghelper.config import find_repo_root
+from tradinghelper.schemas import PRICE_COLUMNS, Bar, PricesFile
 
 ENCODING = "utf-8"
+
+DATA_DIR_ENV = "TH_DATA_DIR"
+
+
+# --- Emplacements ------------------------------------------------------------------------------
+
+
+def data_dir() -> Path:
+    """Dossier des données : `$TH_DATA_DIR` (si non vide) > `<racine du dépôt>/data`."""
+    from_env = os.environ.get(DATA_DIR_ENV, "").strip()
+    if from_env:
+        return Path(from_env)
+    return find_repo_root() / "data"
+
+
+def prices_path(root: Path, symbol: str) -> Path:
+    """`{root}/raw/prices/{SYMBOL}.json` — nom de fichier = symbole de config (F01 R12)."""
+    return root / "raw" / "prices" / f"{symbol}.json"
+
+
+# --- Écriture atomique -------------------------------------------------------------------------
 
 
 def atomic_write_text(path: Path, text: str) -> None:
@@ -74,3 +97,62 @@ def dumps_prices(prices: PricesFile) -> str:
     else:
         body = '  "bars": []'
     return "{\n" + "\n".join(header) + "\n" + body + "\n}\n"
+
+
+# --- Lecture et écriture des fichiers de prix --------------------------------------------------
+
+
+class PricesFileError(Exception):
+    """Fichier de prix illisible ou non conforme au contrat §2 (F01 R9)."""
+
+    def __init__(self, path: Path, reason: str) -> None:
+        self.path = path
+        self.reason = reason
+        super().__init__(f"{path.as_posix()}: {reason}")
+
+
+def read_prices(path: Path) -> PricesFile | None:
+    """Lit et valide un fichier de prix. `None` s'il n'existe pas ; `PricesFileError` s'il est
+    illisible, n'est pas du JSON UTF-8 valide ou viole le contrat."""
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise PricesFileError(path, f"fichier illisible ({exc.strerror})") from exc
+    try:
+        data = json.loads(raw.decode(ENCODING))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PricesFileError(path, f"JSON invalide ({exc})") from exc
+    try:
+        return PricesFile.model_validate(data)
+    except ValidationError as exc:
+        error = exc.errors(include_url=False)[0]
+        location = ".".join(str(part) for part in error["loc"])
+        message = str(error["msg"]).removeprefix("Value error, ")
+        raise PricesFileError(path, f"non conforme au contrat : {location}: {message}") from exc
+
+
+def write_prices_if_changed(path: Path, symbol: str, bars: Sequence[Bar], now: datetime) -> bool:
+    """Écrit `bars` (format canonique, atomique) sauf si le fichier contient déjà ces barres.
+
+    `last_updated = now` seulement en cas d'écriture (F01 R8). Renvoie `True` si le fichier a
+    été écrit. Un fichier existant illisible est remplacé : refuser de l'écraser (R9) est une
+    décision de l'ingestion, prise avant d'appeler cette fonction. Lève `ValidationError`
+    (une `ValueError`) si les barres violent le contrat ; rien n'est alors écrit.
+    """
+    with contextlib.suppress(PricesFileError):
+        existing = read_prices(path)
+        if existing is not None and existing.bars == list(bars):
+            return False
+    prices = PricesFile(
+        schema_version=1,
+        symbol=symbol,
+        currency="USD",
+        source="yfinance",
+        columns=PRICE_COLUMNS,
+        last_updated=now,
+        bars=list(bars),
+    )
+    atomic_write_text(path, dumps_prices(prices))
+    return True

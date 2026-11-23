@@ -10,7 +10,16 @@ from pathlib import Path
 import pytest
 
 from tradinghelper.data import storage
-from tradinghelper.data.storage import atomic_write_json, atomic_write_text, dumps_prices
+from tradinghelper.data.storage import (
+    PricesFileError,
+    atomic_write_json,
+    atomic_write_text,
+    data_dir,
+    dumps_prices,
+    prices_path,
+    read_prices,
+    write_prices_if_changed,
+)
 from tradinghelper.schemas import PRICE_COLUMNS, Bar, PricesFile
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "prices"
@@ -137,3 +146,150 @@ def test_atomic_write_json_format(tmp_path: Path) -> None:
 
     expected = '{\n  "b": [\n    1,\n    2\n  ],\n  "a": "éè"\n}\n'
     assert target.read_bytes().decode("utf-8") == expected
+
+
+# --- Lecture validée (R9) ----------------------------------------------------------------------
+
+BARS: list[Bar] = [
+    (date(2026, 11, 20), 228.1, 231.45, 227.8, 230.95, 229.7312, 51234000),
+    (date(2026, 11, 23), 231.0, 233.12, 229.6, 232.4, 231.1734, 48765000),
+]
+NOW = datetime(2026, 11, 24, 22, 31, 2, tzinfo=UTC)
+LATER = datetime(2026, 11, 25, 22, 31, 2, tzinfo=UTC)
+
+
+def test_read_missing_returns_none(tmp_path: Path) -> None:
+    assert read_prices(tmp_path / "AAPL.json") is None
+
+
+def test_read_valid_file(tmp_path: Path) -> None:
+    target = tmp_path / "AAPL.json"
+    target.write_bytes(CANONICAL_AAPL.read_bytes())
+
+    prices = read_prices(target)
+
+    assert prices is not None
+    assert prices.symbol == "AAPL"
+    assert len(prices.bars) == 3
+
+
+@pytest.mark.parametrize(
+    ("content", "reason"),
+    [
+        (b'{"schema_version": 1, "bars": [', "JSON invalide"),
+        (b"", "JSON invalide"),
+        (b"\xff\xfe\x00", "JSON invalide"),
+    ],
+    ids=["tronqué", "vide", "non UTF-8"],
+)
+def test_read_invalid_json_raises(tmp_path: Path, content: bytes, reason: str) -> None:
+    target = tmp_path / "AAPL.json"
+    target.write_bytes(content)
+
+    with pytest.raises(PricesFileError) as excinfo:
+        read_prices(target)
+
+    assert reason in str(excinfo.value)
+    assert excinfo.value.path == target
+    assert target.as_posix() in str(excinfo.value)
+
+
+def test_read_schema_violation_raises(tmp_path: Path) -> None:
+    data = json.loads(CANONICAL_AAPL.read_text(encoding="utf-8"))
+    data["bars"][1][2] = 1.0  # high < low
+    target = tmp_path / "AAPL.json"
+    target.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(PricesFileError) as excinfo:
+        read_prices(target)
+
+    assert "non conforme au contrat" in str(excinfo.value)
+    assert "2026-11-20" in str(excinfo.value)
+
+
+# --- Écriture conditionnelle (R8, R2) ----------------------------------------------------------
+
+
+def test_write_if_changed_creates_parent_dir(tmp_path: Path) -> None:
+    target = tmp_path / "raw" / "prices" / "AAPL.json"
+
+    assert write_prices_if_changed(target, "AAPL", BARS, NOW) is True
+
+    written = read_prices(target)
+    assert written is not None
+    assert written.bars == BARS
+    assert written.last_updated == NOW
+    assert target.read_bytes().decode("utf-8") == dumps_prices(written)
+
+
+def test_write_if_changed_skips_identical_bars(tmp_path: Path) -> None:
+    target = tmp_path / "AAPL.json"
+    write_prices_if_changed(target, "AAPL", BARS, NOW)
+    before = target.read_bytes()
+    mtime = target.stat().st_mtime_ns
+
+    assert write_prices_if_changed(target, "AAPL", list(BARS), LATER) is False
+
+    assert target.read_bytes() == before
+    assert target.stat().st_mtime_ns == mtime
+
+
+def test_write_if_changed_updates_last_updated_when_bars_change(tmp_path: Path) -> None:
+    target = tmp_path / "AAPL.json"
+    write_prices_if_changed(target, "AAPL", BARS[:1], NOW)
+
+    assert write_prices_if_changed(target, "AAPL", BARS, LATER) is True
+
+    written = read_prices(target)
+    assert written is not None
+    assert written.bars == BARS
+    assert written.last_updated == LATER
+
+
+def test_write_if_changed_overwrites_corrupted_file(tmp_path: Path) -> None:
+    """La décision de ne pas écraser un fichier corrompu (R9) appartient à l'ingestion ;
+    une écriture explicite (ex. backfill `--full`) remplace le fichier."""
+    target = tmp_path / "AAPL.json"
+    target.write_bytes(b"{corrompu")
+
+    assert write_prices_if_changed(target, "AAPL", BARS, NOW) is True
+    assert read_prices(target) is not None
+
+
+def test_write_if_changed_rejects_invalid_bars(tmp_path: Path) -> None:
+    target = tmp_path / "AAPL.json"
+    bad: list[Bar] = [(date(2026, 11, 20), 228.1, 1.0, 227.8, 230.95, 229.7312, 1)]
+
+    with pytest.raises(ValueError, match="high"):
+        write_prices_if_changed(target, "AAPL", bad, NOW)
+
+    assert not target.exists()
+
+
+# --- Emplacements ------------------------------------------------------------------------------
+
+
+def test_data_dir_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TH_DATA_DIR", str(tmp_path))
+
+    assert data_dir() == tmp_path
+
+
+def test_data_dir_default_repo_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TH_DATA_DIR", raising=False)
+    repo_root = Path(__file__).resolve().parents[2]
+    monkeypatch.chdir(repo_root / "tests")
+
+    assert data_dir() == repo_root / "data"
+
+
+def test_data_dir_blank_env_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TH_DATA_DIR", "  ")
+    repo_root = Path(__file__).resolve().parents[2]
+    monkeypatch.chdir(repo_root)
+
+    assert data_dir() == repo_root / "data"
+
+
+def test_prices_path_keeps_config_symbol(tmp_path: Path) -> None:
+    assert prices_path(tmp_path, "BRK.B") == tmp_path / "raw" / "prices" / "BRK.B.json"

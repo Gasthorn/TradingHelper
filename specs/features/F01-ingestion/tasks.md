@@ -43,7 +43,7 @@
   - Fichiers : `src/tradinghelper/data/storage.py` (`atomic_write_text`, `atomic_write_json`, `dumps_prices`), `tests/fixtures/prices/canonical_AAPL.json`, `tests/data/test_storage.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T6** Lecture validée, écriture conditionnelle, dossier de données — R8, R9, R2
+- [x] **T6** Lecture validée, écriture conditionnelle, dossier de données — R8, R9, R2
   - Tests : `tests/data/test_storage.py::test_read_missing_returns_none`, `::test_read_invalid_json_raises`, `::test_read_schema_violation_raises` (`PricesFileError`), `::test_write_if_changed_skips_identical_bars` (fichier non réécrit, `last_updated` inchangé, retourne `False`), `::test_write_if_changed_creates_parent_dir`, `::test_data_dir_env_override` (`TH_DATA_DIR`) et `::test_data_dir_default_repo_root`.
   - Fichiers : `src/tradinghelper/data/storage.py` (`PricesFileError`, `read_prices`, `write_prices_if_changed`, `data_dir`).
   - Fini quand : tests verts.
