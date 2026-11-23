@@ -3,6 +3,7 @@ vrai calendrier NYSE (hors ligne), horloge et `sleep` injectés."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -13,6 +14,7 @@ from fakes import FakeClock, FakePriceSource, RecordingSleep, make_bars
 from tradinghelper.config import UniverseConfig
 from tradinghelper.data.calendar import NyseCalendar
 from tradinghelper.data.ingest import (
+    BATCH_SIZE,
     RETRY_DELAYS,
     IngestOutcome,
     IngestRequest,
@@ -226,7 +228,8 @@ def test_empty_initial_response_fails(env: _Env) -> None:
     outcome = env.run()
 
     msft = _results(outcome)["MSFT"]
-    assert (msft.status, msft.mode, msft.attempts) == ("failed", "initial", 4)
+    # 1 appel groupé (MSFT + SPY, même date de début) + 4 appels individuels.
+    assert (msft.status, msft.mode, msft.attempts) == ("failed", "initial", 5)
     assert msft.error is not None
     assert not env.file("MSFT").exists()
     assert _results(outcome)["AAPL"].status == "ok"
@@ -284,3 +287,120 @@ def test_run_timestamps_and_args(env: _Env) -> None:
     assert outcome.run.finished_at >= outcome.run.started_at
     assert outcome.run.duration_s == 0.0
     assert outcome.run.args.model_dump() == {"symbols": None, "full": False, "start": None}
+
+
+# --- Lots et relances individuelles (R11, R10, R12) ---------------------------------------------
+
+
+def test_batch_size_is_20() -> None:
+    assert BATCH_SIZE == 20
+
+
+def test_45_tickers_same_start_make_3_batch_calls(env: _Env) -> None:
+    symbols = [f"T{i:02d}" for i in range(44)] + ["SPY"]
+    env.source.data = _history(*symbols)
+    universe = _universe(*((symbol, date(2026, 11, 2)) for symbol in symbols))
+
+    outcome = env.run(universe)
+
+    assert [len(call[0]) for call in env.source.calls] == [20, 20, 5]
+    assert sorted(s for call in env.source.calls for s in call[0]) == sorted(symbols)
+    assert {r.status for r in outcome.run.tickers} == {"ok"}
+    assert {r.attempts for r in outcome.run.tickers} == {1}
+
+
+def test_tickers_grouped_by_start_date(env: _Env) -> None:
+    universe = _universe(
+        ("AAPL", date(2026, 10, 1)), ("MSFT", date(2026, 9, 1)), ("SPY", date(2026, 10, 1))
+    )
+
+    env.run(universe)
+
+    assert sorted((call[0], call[1]) for call in env.source.calls) == [
+        (("AAPL", "SPY"), date(2026, 10, 1)),
+        (("MSFT",), date(2026, 9, 1)),
+    ]
+
+
+class _BatchOmits(FakePriceSource):
+    """Omet `flaky` des réponses groupées, mais le renvoie quand il est demandé seul."""
+
+    def __init__(self, data: dict[str, list[RawBar]], flaky: str) -> None:
+        super().__init__(data)
+        self.flaky = flaky
+
+    def fetch(self, symbols: Sequence[str], start: date, end: date) -> Mapping[str, list[RawBar]]:
+        result = dict(super().fetch(symbols, start, end))
+        if len(symbols) > 1:
+            result.pop(self.flaky, None)
+        return result
+
+
+def test_ticker_missing_from_batch_retried_alone(env: _Env) -> None:
+    env.source = _BatchOmits(_history("AAPL", "MSFT", "SPY"), flaky="MSFT")
+    universe = _universe(("AAPL", date(2026, 10, 1)), ("MSFT", date(2026, 10, 1)))
+
+    outcome = env.run(universe)
+
+    assert [call[0] for call in env.source.calls] == [("AAPL", "MSFT", "SPY"), ("MSFT",)]
+    msft = _results(outcome)["MSFT"]
+    assert (msft.status, msft.attempts) == ("ok", 2)  # 1 appel groupé + 1 appel individuel
+    assert _results(outcome)["AAPL"].attempts == 1
+    assert env.file("MSFT").is_file()
+    assert env.sleep.delays == []
+
+
+def test_ticker_always_missing_fails_after_individual_retries(env: _Env) -> None:
+    env.source.missing.add("MSFT")
+    universe = _universe(("AAPL", date(2026, 10, 1)), ("MSFT", date(2026, 10, 1)))
+
+    outcome = env.run(universe)
+
+    msft = _results(outcome)["MSFT"]
+    assert (msft.status, msft.attempts) == ("failed", 5)  # 1 groupé + 4 individuels
+    assert env.sleep.delays == [2.0, 4.0, 8.0]
+
+
+def test_batch_failing_entirely_falls_back_to_individual(env: _Env) -> None:
+    env.source.fail_times["AAPL"] = 4  # les 4 tentatives du lot échouent
+    universe = _universe(("AAPL", date(2026, 10, 1)), ("MSFT", date(2026, 10, 1)))
+
+    outcome = env.run(universe)
+
+    calls = [call[0] for call in env.source.calls]
+    assert calls[:4] == [("AAPL", "MSFT", "SPY")] * 4
+    assert sorted(calls[4:]) == [("AAPL",), ("MSFT",), ("SPY",)]
+    assert {r.status for r in outcome.run.tickers} == {"ok"}
+    assert {r.attempts for r in outcome.run.tickers} == {5}  # 4 groupées + 1 individuelle
+    assert env.sleep.delays == [2.0, 4.0, 8.0]
+
+
+def test_one_failing_ticker_does_not_block_others(env: _Env) -> None:
+    env.source.always_fail.add("MSFT")
+
+    outcome = env.run()
+
+    results = _results(outcome)
+    assert results["AAPL"].status == "ok"
+    assert results["SPY"].status == "ok"
+    msft = results["MSFT"]
+    assert msft.status == "failed"
+    assert msft.error is not None
+    assert "échec simulé pour MSFT" in msft.error
+    assert env.file("AAPL").is_file()
+    assert not env.file("MSFT").exists()
+    assert outcome.run.exit_code == 0
+    assert outcome.should_report is True
+
+
+def test_dot_symbol_stored_under_config_name(env: _Env) -> None:
+    env.source.data = _history("BRK.B", "SPY")
+    universe = _universe(("BRK.B", date(2026, 11, 2)))
+
+    outcome = env.run(universe)
+
+    assert _results(outcome)["BRK.B"].status == "ok"
+    assert env.file("BRK.B").name == "BRK.B.json"
+    prices = read_prices(env.file("BRK.B"))
+    assert prices is not None
+    assert prices.symbol == "BRK.B"

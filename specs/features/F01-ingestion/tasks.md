@@ -112,13 +112,13 @@
   - Fichiers : `src/tradinghelper/data/ingest.py` (`IngestRequest`, `IngestOutcome`, `ingest()` : calcul de `S`, cible, plan par ticker, mode initial, écriture).
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T14** Lots et relances individuelles — R11, R10, R12
+- [x] **T14** Lots et relances individuelles — R11, R10, R12
   - Tests :
     - `tests/data/test_ingest.py::test_45_tickers_same_start_make_3_batch_calls` (lots de 20/20/5) ;
     - `::test_tickers_grouped_by_start_date` ;
     - `::test_ticker_missing_from_batch_retried_alone` (`attempts` cumulés) ;
     - `::test_batch_failing_entirely_falls_back_to_individual` ;
-    - `::test_one_failing_ticker_does_not_block_others` (1 sur 3 lève toujours : les 2 autres sont écrits, le 3e est `failed` avec son erreur et `attempts = 4` en individuel) ;
+    - `::test_one_failing_ticker_does_not_block_others` (1 sur 3 lève toujours : les 2 autres sont écrits, le 3e est `failed` avec son erreur ; `attempts` compte tous les appels, groupés et individuels, où le ticker figurait) ;
     - `::test_dot_symbol_stored_under_config_name`.
   - Fichiers : `src/tradinghelper/data/ingest.py` (groupage, `with_retry` autour de chaque `fetch`, relance individuelle).
   - Fini quand : tests verts ; `RecordingSleep` montre les attentes attendues.

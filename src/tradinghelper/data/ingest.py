@@ -38,6 +38,9 @@ from tradinghelper.schemas import (
 # Attentes entre les tentatives : 1 tentative + 3 relances (R10).
 RETRY_DELAYS: Final = (2.0, 4.0, 8.0)
 
+# Nombre maximal de tickers par appel groupé à la source (R11).
+BATCH_SIZE: Final = 20
+
 
 class RetryError(Exception):
     """Toutes les tentatives d'un appel ont échoué (R10)."""
@@ -189,22 +192,44 @@ class _Ingestion:
             return _result(symbol, "unchanged", None)
         return _Plan(symbol, "incremental", self.calendar.shift(last, -OVERLAP_SESSIONS), stored)
 
+    def fetch_one(self, symbol: str, start: date, prior_attempts: int = 0) -> _Fetched:
+        """Appel individuel avec relances ; `prior_attempts` : tentatives déjà faites en lot."""
+        try:
+            response, attempts = with_retry(
+                partial(self.source.fetch, [symbol], start, self.session), self.sleep
+            )
+        except RetryError as exc:
+            return _Fetched(None, prior_attempts + exc.attempts, str(exc))
+        bars = response.get(symbol)
+        if bars is None:
+            return _Fetched(None, prior_attempts + attempts, "aucune donnée renvoyée")
+        return _Fetched(bars, prior_attempts + attempts)
+
     def fetch(self, plans: Sequence[_Plan]) -> Mapping[str, _Fetched]:
-        fetched: dict[str, _Fetched] = {}
+        """Lots de ≤ 20 tickers de même date de début (R11) ; un ticker absent de la réponse
+        d'un lot, ou d'un lot en échec, est retenté seul. `attempts` compte tous les appels
+        (groupés et individuels) où le ticker figurait."""
+        by_start: dict[date, list[str]] = {}
         for plan in plans:
-            try:
-                response, attempts = with_retry(
-                    partial(self.source.fetch, [plan.symbol], plan.fetch_start, self.session),
-                    self.sleep,
-                )
-            except RetryError as exc:
-                fetched[plan.symbol] = _Fetched(None, exc.attempts, str(exc))
-                continue
-            bars = response.get(plan.symbol)
-            if bars is None:
-                fetched[plan.symbol] = _Fetched(None, attempts, "aucune donnée renvoyée")
-            else:
-                fetched[plan.symbol] = _Fetched(bars, attempts)
+            by_start.setdefault(plan.fetch_start, []).append(plan.symbol)
+
+        fetched: dict[str, _Fetched] = {}
+        for start, symbols in by_start.items():
+            for offset in range(0, len(symbols), BATCH_SIZE):
+                batch = symbols[offset : offset + BATCH_SIZE]
+                try:
+                    response, attempts = with_retry(
+                        partial(self.source.fetch, batch, start, self.session), self.sleep
+                    )
+                except RetryError as exc:
+                    response, attempts = {}, exc.attempts
+                for symbol in batch:
+                    bars = response.get(symbol)
+                    fetched[symbol] = (
+                        _Fetched(bars, attempts)
+                        if bars is not None
+                        else self.fetch_one(symbol, start, prior_attempts=attempts)
+                    )
         return fetched
 
     def process(self, plan: _Plan, fetched: _Fetched) -> IngestTickerResult:
