@@ -1,13 +1,16 @@
-"""Tests d'hygiène du dépôt (F00 — R1, R4, R5, R18, R19, R20, R21)."""
+"""Tests d'hygiène du dépôt (F00 — R1, R4, R5, R15 à R21)."""
 
 from __future__ import annotations
 
 import ast
+import re
 import socket
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
+import yaml
 from pytest_socket import SocketBlockedError
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -149,3 +152,99 @@ def test_license_is_mit() -> None:
     assert license_text.splitlines()[0] == "MIT License"
     assert "Copyright (c) 2026 Gasthorn" in license_text
     assert "WITHOUT WARRANTY OF ANY KIND" in license_text
+
+
+# --- Workflow CI (R15, R16, R17) ----------------------------------------------------------------
+
+CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+
+
+def _ci() -> dict[str, Any]:
+    data = yaml.safe_load(CI_WORKFLOW.read_text(encoding="utf-8"))
+    assert isinstance(data, dict)
+    # YAML 1.1 : la clé `on` est lue comme le booléen True par PyYAML.
+    if True in data:
+        data["on"] = data.pop(True)
+    return data
+
+
+def _steps(job: str) -> list[dict[str, Any]]:
+    steps = _ci()["jobs"][job]["steps"]
+    assert isinstance(steps, list)
+    return steps
+
+
+def _run_commands(job: str) -> str:
+    return "\n".join(str(step.get("run", "")) for step in _steps(job))
+
+
+def test_ci_triggers_on_main_push_and_pull_requests() -> None:
+    triggers = _ci()["on"]
+
+    assert triggers["push"]["branches"] == ["main"]
+    assert "pull_request" in triggers
+
+
+def test_ci_declares_read_only_permissions() -> None:
+    assert _ci()["permissions"] == {"contents": "read"}
+
+
+def test_ci_cancels_superseded_runs() -> None:
+    concurrency = _ci()["concurrency"]
+
+    assert "github.ref" in concurrency["group"]
+    assert concurrency["cancel-in-progress"] is True
+
+
+@pytest.mark.parametrize("job", ["python", "dashboard"])
+def test_ci_job_has_timeout_and_ubuntu_runner(job: str) -> None:
+    config = _ci()["jobs"][job]
+
+    assert config["runs-on"] == "ubuntu-latest"
+    assert 0 < config["timeout-minutes"] <= 15
+
+
+def test_ci_actions_pinned_by_sha() -> None:
+    uses = re.findall(r"^\s*(?:-\s*)?uses:\s*(\S+)", CI_WORKFLOW.read_text(encoding="utf-8"), re.M)
+
+    assert uses, "aucune action trouvée"
+    for action in uses:
+        assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", action), action
+
+
+def test_ci_uses_no_secrets() -> None:
+    assert "secrets." not in CI_WORKFLOW.read_text(encoding="utf-8")
+
+
+def test_ci_python_job_runs_quality_gates() -> None:
+    commands = _run_commands("python")
+
+    for command in (
+        "uv lock --check",
+        "uv sync --locked",
+        "uv run ruff check .",
+        "uv run ruff format --check .",
+        "uv run mypy --strict src/",
+        "uv run pytest",
+    ):
+        assert command in commands, command
+
+
+def test_ci_dashboard_job_runs_quality_gates() -> None:
+    commands = _run_commands("dashboard")
+
+    for command in (
+        "npm ci",
+        "npm run lint",
+        "npm run typecheck",
+        "npm run build",
+        "npm run check:dist",
+        "TH_DASHBOARD_BASE: /TradingHelper/",
+    ):
+        assert command in commands or command in CI_WORKFLOW.read_text(encoding="utf-8"), command
+
+
+def test_license_forced_lf() -> None:
+    result = _git("check-attr", "eol", "--", "LICENSE")
+
+    assert result.stdout.strip() == "LICENSE: eol: lf"

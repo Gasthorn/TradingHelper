@@ -1,0 +1,66 @@
+# Intégration continue (spec F00 — R15, R16, R17).
+# Lint, typage, tests Python ; lint, typage, build et vérification du dashboard.
+# Aucun secret requis : fonctionne aussi sur les PR provenant d'un fork.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: true
+      - name: Lockfile à jour
+        run: uv lock --check
+      - name: Installation (Python 3.12 via .python-version)
+        run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check .
+      - name: Format
+        run: uv run ruff format --check .
+      - name: Typage
+        run: uv run mypy --strict src/
+      - name: Tests
+        run: uv run pytest
+
+  dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: dashboard/.nvmrc
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Installation
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typage
+        run: npm run typecheck
+      - name: Build (base "/")
+        run: npm run build
+      - name: Vérification du build (titre, bandeau P8, assets)
+        run: npm run check:dist
+      - name: Build pour GitHub Pages (base "/TradingHelper/")
+        env:
+          TH_DASHBOARD_BASE: /TradingHelper/
+        run: npm run build && npm run check:dist
