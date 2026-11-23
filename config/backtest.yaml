@@ -1,0 +1,6 @@
+# Paramètres de simulation (vision : 10 000 USD par stratégie).
+# Clés minimales posées par F00 ; leur sémantique et leurs extensions sont définies par F04 (R3).
+initial_capital: 10000.0
+commission_fixed: 1.0   # USD par ordre
+commission_pct: 0.0     # fraction du notionnel (0.001 = 0,1 %)
+slippage_bps: 5         # points de base appliqués au prix d'exécution

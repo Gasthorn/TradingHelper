@@ -1,0 +1,3 @@
+# Stratégies actives. Chaque entrée : { id, type, active, params }.
+# Vide en F00 : les baselines (F05) et les modèles ML (F06) y ajouteront leurs entrées.
+strategies: []

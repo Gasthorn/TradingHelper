@@ -10,9 +10,18 @@ from typing import Any
 
 import pytest
 
-from tradinghelper.config import ConfigError, UniverseConfig, _read_yaml, _validate
+from tradinghelper.config import (
+    AppConfig,
+    ConfigError,
+    UniverseConfig,
+    _read_yaml,
+    _validate,
+    load_config,
+)
 
-from conftest import TODAY, VALID_UNIVERSE, WriteConfig
+from conftest import TODAY, VALID_BACKTEST, VALID_UNIVERSE, WriteConfig
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # --- ConfigError ---------------------------------------------------------------------------------
 
@@ -169,3 +178,121 @@ def test_duplicate_symbol_reason_names_symbol(write_config: WriteConfig) -> None
 
     with pytest.raises(ConfigError, match="AAPL"):
         _load_universe(config_dir)
+
+
+# --- load_config : fichiers par défaut (R6) -----------------------------------------------------
+
+
+def test_default_config_loads() -> None:
+    config = load_config(REPO_ROOT / "config", today=TODAY)
+
+    assert isinstance(config, AppConfig)
+    assert config.config_dir == REPO_ROOT / "config"
+    assert config.universe.currency == "USD"
+    assert config.universe.benchmark == "SPY"
+    symbols = [t.symbol for t in config.universe.tickers]
+    assert len(symbols) == 20
+    assert "SPY" not in symbols  # benchmark hors univers de trading (Q3)
+    assert len({t.sector for t in config.universe.tickers}) >= 8  # Q2
+    assert config.backtest.initial_capital == 10000.0
+    assert config.strategies.strategies == []
+
+
+def test_load_config_from_written_dir(write_config: WriteConfig) -> None:
+    config_dir = write_config()
+
+    config = load_config(config_dir, today=TODAY)
+
+    assert config.config_dir == config_dir
+    assert [t.symbol for t in config.universe.tickers] == ["AAPL", "MSFT", "BRK-B"]
+    assert config.backtest.slippage_bps == 5
+
+
+@pytest.mark.parametrize("stem", ["universe", "backtest", "strategies"])
+def test_missing_file_names_it(write_config: WriteConfig, stem: str) -> None:
+    config_dir = write_config()
+    (config_dir / f"{stem}.yaml").unlink()
+
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_dir, today=TODAY)
+
+    assert excinfo.value.file == config_dir / f"{stem}.yaml"
+
+
+# --- BacktestConfig (R8) ------------------------------------------------------------------------
+
+
+def _backtest(**changes: Any) -> dict[str, Any]:
+    data = copy.deepcopy(VALID_BACKTEST)
+    data.update(changes)
+    return data
+
+
+@pytest.mark.parametrize(
+    ("data", "expected_field"),
+    [
+        (_backtest(initial_capital=0), "initial_capital"),
+        (_backtest(initial_capital=-100.0), "initial_capital"),
+        (_backtest(commission_fixed=-1.0), "commission_fixed"),
+        (_backtest(commission_pct=-0.001), "commission_pct"),
+        (_backtest(slippage_bps=-5), "slippage_bps"),
+        (_backtest(leverage=2), "leverage"),
+    ],
+    ids=[
+        "capital-nul",
+        "capital-negatif",
+        "commission-fixe-negative",
+        "commission-pct-negative",
+        "slippage-negatif",
+        "cle-inconnue",
+    ],
+)
+def test_invalid_backtest(
+    write_config: WriteConfig, data: dict[str, Any], expected_field: str
+) -> None:
+    config_dir = write_config(backtest=data)
+
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_dir, today=TODAY)
+
+    assert excinfo.value.file == config_dir / "backtest.yaml"
+    assert excinfo.value.field == expected_field
+
+
+# --- StrategiesConfig (R8) ----------------------------------------------------------------------
+
+
+def test_strategy_entry_defaults(write_config: WriteConfig) -> None:
+    config_dir = write_config(strategies={"strategies": [{"id": "buy_hold", "type": "buy_hold"}]})
+
+    entry = load_config(config_dir, today=TODAY).strategies.strategies[0]
+
+    assert entry.id == "buy_hold"
+    assert entry.active is True
+    assert entry.params == {}
+
+
+def test_duplicate_strategy_id(write_config: WriteConfig) -> None:
+    strategies = {
+        "strategies": [
+            {"id": "sma_cross", "type": "sma_cross", "params": {"fast": 20, "slow": 50}},
+            {"id": "sma_cross", "type": "sma_cross", "params": {"fast": 10, "slow": 30}},
+        ]
+    }
+    config_dir = write_config(strategies=strategies)
+
+    with pytest.raises(ConfigError, match="sma_cross") as excinfo:
+        load_config(config_dir, today=TODAY)
+
+    assert excinfo.value.file == config_dir / "strategies.yaml"
+    assert excinfo.value.field == "strategies"
+
+
+def test_unknown_strategy_key(write_config: WriteConfig) -> None:
+    strategies = {"strategies": [{"id": "x", "type": "buy_hold", "enabled": True}]}
+    config_dir = write_config(strategies=strategies)
+
+    with pytest.raises(ConfigError) as excinfo:
+        load_config(config_dir, today=TODAY)
+
+    assert excinfo.value.field == "strategies[0].enabled"

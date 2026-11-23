@@ -14,6 +14,9 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    JsonValue,
+    NonNegativeFloat,
+    PositiveFloat,
     StringConstraints,
     ValidationError,
     ValidationInfo,
@@ -22,6 +25,8 @@ from pydantic import (
 from yaml.nodes import MappingNode
 
 SYMBOL_PATTERN = r"^[A-Z][A-Z0-9.\-]{0,9}$"
+
+CONFIG_FILES = ("universe.yaml", "backtest.yaml", "strategies.yaml")
 
 Symbol = Annotated[str, StringConstraints(pattern=SYMBOL_PATTERN)]
 
@@ -129,6 +134,48 @@ class UniverseConfig(_Strict):
         return tickers
 
 
+class BacktestConfig(_Strict):
+    """Clés minimales ; leur sémantique est définie par F04 (R3)."""
+
+    initial_capital: PositiveFloat
+    commission_fixed: NonNegativeFloat  # USD par ordre
+    commission_pct: NonNegativeFloat  # fraction du notionnel
+    slippage_bps: NonNegativeFloat
+
+
+class StrategyEntry(_Strict):
+    id: str
+    type: str
+    active: bool = True
+    params: dict[str, JsonValue] = Field(default_factory=dict)
+
+
+class StrategiesConfig(_Strict):
+    """Structure minimale ; les entrées sont ajoutées par F05 et F06."""
+
+    strategies: list[StrategyEntry]
+
+    @field_validator("strategies")
+    @classmethod
+    def _unique_ids(cls, strategies: list[StrategyEntry]) -> list[StrategyEntry]:
+        first_index: dict[str, int] = {}
+        for index, entry in enumerate(strategies):
+            if entry.id in first_index:
+                raise ValueError(
+                    f"id de stratégie dupliqué {entry.id!r} "
+                    f"(positions {first_index[entry.id]} et {index})"
+                )
+            first_index[entry.id] = index
+        return strategies
+
+
+class AppConfig(_Strict):
+    config_dir: Path
+    universe: UniverseConfig
+    backtest: BacktestConfig
+    strategies: StrategiesConfig
+
+
 # --- Validation ---------------------------------------------------------------------------------
 
 
@@ -148,3 +195,27 @@ def _validate[M: BaseModel](model: type[M], data: object, file: Path, today: dat
         error = exc.errors(include_url=False)[0]
         reason = str(error["msg"]).removeprefix("Value error, ")
         raise ConfigError(file, _format_loc(tuple(error["loc"])), reason) from None
+
+
+# --- Chargement ---------------------------------------------------------------------------------
+
+
+def load_config(config_dir: Path | None = None, *, today: date | None = None) -> AppConfig:
+    """Charge et valide `universe.yaml`, `backtest.yaml` et `strategies.yaml`.
+
+    `today` est injectable pour les tests (défaut : `date.today()`).
+    Lève `ConfigError` à la première erreur rencontrée.
+    """
+    directory = config_dir if config_dir is not None else Path("config")
+    reference = today if today is not None else date.today()
+
+    def _load[M: BaseModel](model: type[M], filename: str) -> M:
+        path = directory / filename
+        return _validate(model, _read_yaml(path), path, reference)
+
+    return AppConfig(
+        config_dir=directory,
+        universe=_load(UniverseConfig, "universe.yaml"),
+        backtest=_load(BacktestConfig, "backtest.yaml"),
+        strategies=_load(StrategiesConfig, "strategies.yaml"),
+    )

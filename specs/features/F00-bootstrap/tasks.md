@@ -33,7 +33,7 @@
   - Fichiers : `src/tradinghelper/config.py` (`_Strict`, `TickerConfig`, `UniverseConfig`, `_validate` qui convertit `ValidationError` en `ConfigError`), `tests/conftest.py` (fixture `write_config(tmp_path, **overrides)`), `pyproject.toml` (`pydantic`, plugin mypy pydantic), `uv.lock`
   - Fini quand : tests verts ; `mypy --strict src/` passe avec le plugin pydantic.
 
-- [ ] **T6** `BacktestConfig`, `StrategiesConfig`, `load_config` et YAML par défaut — R6, R8
+- [x] **T6** `BacktestConfig`, `StrategiesConfig`, `load_config` et YAML par défaut — R6, R8
   - Tests : `tests/test_config.py::test_default_config_loads` (vrai dossier `config/`, 20 tickers, SPY en benchmark), `::test_invalid_backtest[...]` (capital ≤ 0, commission < 0, slippage < 0), `::test_duplicate_strategy_id`
   - Fichiers : `src/tradinghelper/config.py` (`BacktestConfig`, `StrategyEntry`, `StrategiesConfig`, `AppConfig`, `load_config`), `config/universe.yaml` (annexe du plan), `config/backtest.yaml`, `config/strategies.yaml`
   - Fini quand : tests verts ; `load_config()` depuis la racine renvoie un `AppConfig` complet.
