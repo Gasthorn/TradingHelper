@@ -1,6 +1,6 @@
 # F00 — Bootstrap du dépôt
 
-- **Statut** : 🔍 Verifying
+- **Statut** : ✔️ Done
 - **Milestone** : M0
 - **Dépend de** : —
 - **Contrats** : `03-data-contracts.md` §1 (univers)
