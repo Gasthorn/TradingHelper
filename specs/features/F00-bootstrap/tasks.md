@@ -55,7 +55,7 @@
   - Fichiers : `dashboard/package.json` (scripts `dev`, `lint`, `typecheck`, `build`, `check:dist` ; `engines.node: ">=22 <23"`), `dashboard/package-lock.json`, `dashboard/.nvmrc`, `dashboard/tsconfig.json`, `dashboard/vite.config.ts`, `dashboard/eslint.config.js`, `dashboard/src/main.tsx`, `dashboard/src/App.tsx`, `dashboard/index.html` minimal
   - Fini quand : `cd dashboard; npm ci; npm run lint; npm run typecheck; npm run build` sortent en 0 avec Node 22 ; `tsconfig.json` contient `"strict": true`.
 
-- [ ] **T10** Page « Hello TradingHelper » et bandeau P8 — R12, R13
+- [x] **T10** Page « Hello TradingHelper » et bandeau P8 — R12, R13
   - Tests : `dashboard/scripts/check-dist.mjs` écrit d'abord (vérifie dans `dist/index.html` « Hello TradingHelper » et le texte exact de P8), doit échouer sur le build de T9
   - Fichiers : `dashboard/scripts/check-dist.mjs`, `dashboard/index.html` (titre, `<h1>`, bandeau statiques, `#app`), `dashboard/src/style.css`
   - Fini quand : `npm run build; npm run check:dist` passe sans `dashboard/public/data/` présent.

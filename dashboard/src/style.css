@@ -1,0 +1,38 @@
+:root {
+  color-scheme: light dark;
+  --disclaimer-bg: #fff4d6;
+  --disclaimer-fg: #5c4400;
+  --disclaimer-border: #e8c766;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --disclaimer-bg: #3a2f10;
+    --disclaimer-fg: #f5dc9a;
+    --disclaimer-border: #6b5520;
+  }
+}
+
+body {
+  margin: 0;
+}
+
+/* Bandeau P8 : collé en haut de page, jamais masqué par le défilement. */
+.disclaimer {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 0.5rem 1rem;
+  background: var(--disclaimer-bg);
+  color: var(--disclaimer-fg);
+  border-bottom: 1px solid var(--disclaimer-border);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.site-header,
+main {
+  padding: 0 1rem;
+}
