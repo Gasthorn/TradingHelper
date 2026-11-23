@@ -74,7 +74,7 @@
 
 ## CI
 
-- [ ] **T13** Workflow `ci.yml` — R15, R16, R17, R3
+- [x] **T13** Workflow `ci.yml` — R15, R16, R17, R3
   - Tests : `tests/test_repo_hygiene.py::test_ci_actions_pinned_by_sha`, `::test_ci_uses_no_secrets`, `::test_ci_declares_read_only_permissions`
   - Fichiers : `.github/workflows/ci.yml` (déclencheurs `push: main` + `pull_request` ; jobs `python` et `dashboard` ; `uv lock --check` + `uv sync --locked` ; `npm ci`, `lint`, `typecheck`, `build`, `check:dist`, puis 2ᵉ build avec `TH_DASHBOARD_BASE=/TradingHelper/` et `check:dist` ; caches uv/npm ; `concurrency` par ref ; `timeout-minutes: 10` ; SHA résolus via `gh api`, tag en commentaire)
   - Fini quand : tests verts ; après push de `feat/F00-bootstrap` (avec ton accord) et ouverture de la PR, les deux jobs sont verts.
