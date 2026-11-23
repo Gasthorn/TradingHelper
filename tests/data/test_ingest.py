@@ -24,7 +24,7 @@ from tradinghelper.data.ingest import (
 )
 from tradinghelper.data.source import RawBar
 from tradinghelper.data.storage import dumps_prices, prices_path, read_prices
-from tradinghelper.schemas import IngestTickerResult
+from tradinghelper.schemas import Bar, IngestTickerResult
 
 # --- Relances avec backoff (R10) ---------------------------------------------------------------
 
@@ -404,3 +404,254 @@ def test_dot_symbol_stored_under_config_name(env: _Env) -> None:
     prices = read_prices(env.file("BRK.B"))
     assert prices is not None
     assert prices.symbol == "BRK.B"
+
+
+# --- Mode incrémental, rattrapage et réécriture sur révision (R3, R4, R7, R6) -------------------
+
+SOLO = _universe(("AAPL", date(2026, 10, 1)), benchmark="AAPL")  # un seul ticker, sans SPY
+
+
+def _at(day: int, hour: int = 22, minute: int = 30) -> datetime:
+    return datetime(2026, 11, day, hour, minute, tzinfo=UTC)
+
+
+def _bar_lines(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    return [line for line in text.splitlines() if line.startswith('    ["')]
+
+
+def _scaled(bars: list[RawBar], *, adj: float = 1.0, close: float = 1.0) -> list[RawBar]:
+    return [
+        RawBar(
+            b.date,
+            b.open * close,
+            b.high * close,
+            b.low * close,
+            b.close * close,
+            round(b.adj_close * adj, 4),
+            b.volume,
+        )
+        for b in bars
+    ]
+
+
+def _stored_bar(env: _Env, day: date) -> Bar:
+    prices = read_prices(env.file("AAPL"))
+    assert prices is not None
+    return next(bar for bar in prices.bars if bar[0] == day)
+
+
+def _initial(env: _Env, universe: UniverseConfig = SOLO, day: int = 24) -> None:
+    env.clock.now = _at(day)
+    env.run(universe)
+    env.source.calls.clear()
+    env.sleep.delays.clear()
+
+
+def test_one_new_session_adds_one_line(env: _Env) -> None:
+    _initial(env, UNIVERSE)
+    before = {s: _bar_lines(env.file(s)) for s in ("AAPL", "MSFT", "SPY")}
+    env.clock.now = _at(25)
+
+    outcome = env.run()
+
+    for symbol, old_lines in before.items():
+        new_lines = _bar_lines(env.file(symbol))
+        assert len(new_lines) == len(old_lines) + 1
+        # Seule la virgule de l'ancienne dernière ligne change ; barres existantes intactes.
+        assert [x.rstrip(",") for x in new_lines[:-1]] == [x.rstrip(",") for x in old_lines]
+        assert '"2026-11-25"' in new_lines[-1]
+        result = _results(outcome)[symbol]
+        assert (result.status, result.mode, result.bars_added, result.bars_revised) == (
+            "ok",
+            "incremental",
+            1,
+            0,
+        )
+    assert outcome.session == date(2026, 11, 25)
+
+
+def test_three_missed_sessions_add_three_lines(env: _Env) -> None:
+    _initial(env)
+    before = len(_bar_lines(env.file("AAPL")))
+    env.clock.now = _at(30)  # 25, 27, 30 (le 26 est férié)
+
+    outcome = env.run(SOLO)
+
+    assert len(_bar_lines(env.file("AAPL"))) == before + 3
+    assert _results(outcome)["AAPL"].bars_added == 3
+
+
+def test_request_starts_5_sessions_before_last_date(env: _Env) -> None:
+    _initial(env)
+    env.clock.now = _at(25)
+
+    env.run(SOLO)
+
+    assert env.source.calls == [(("AAPL",), date(2026, 11, 17), date(2026, 11, 25))]
+
+
+def test_overlap_volume_revision_replaced_without_rewrite(env: _Env) -> None:
+    _initial(env)
+    env.source.data["AAPL"] = [
+        RawBar(b.date, b.open, b.high, b.low, b.close, b.adj_close, 7.0)
+        if b.date == date(2026, 11, 20)
+        else b
+        for b in env.source.data["AAPL"]
+    ]
+    env.clock.now = _at(25)
+
+    outcome = env.run(SOLO)
+
+    aapl = _results(outcome)["AAPL"]
+    assert (aapl.bars_added, aapl.bars_revised, aapl.history_rewritten) == (1, 1, False)
+    assert _stored_bar(env, date(2026, 11, 20))[6] == 7
+    assert len(env.source.calls) == 1
+
+
+def test_no_new_bar_when_expected_fails(env: _Env) -> None:
+    _initial(env)
+    before = env.file("AAPL").read_bytes()
+    env.source.data["AAPL"] = [b for b in env.source.data["AAPL"] if b.date <= S]
+    env.clock.now = _at(25)
+
+    outcome = env.run(SOLO)
+
+    aapl = _results(outcome)["AAPL"]
+    assert (aapl.status, aapl.mode, aapl.attempts) == ("failed", "incremental", 1)
+    assert aapl.error is not None
+    assert "séances attendues" in aapl.error
+    assert env.file("AAPL").read_bytes() == before
+    assert outcome.run.exit_code == 1
+    assert outcome.should_report is True
+
+
+def test_revision_triggers_full_rewrite(env: _Env) -> None:
+    _initial(env)
+    env.source.data["AAPL"] = _scaled(env.source.data["AAPL"], adj=0.997)  # dividende 0,3 %
+    env.clock.now = _at(25)
+
+    outcome = env.run(SOLO)
+
+    aapl = _results(outcome)["AAPL"]
+    assert (aapl.status, aapl.history_rewritten, aapl.rewrite_reason) == ("ok", True, "revision")
+    assert aapl.bars_added == 1
+    assert aapl.bars_revised == len(CAL.sessions(date(2026, 10, 1), S))
+    assert aapl.attempts == 2
+    assert env.source.calls == [
+        (("AAPL",), date(2026, 11, 17), date(2026, 11, 25)),
+        (("AAPL",), date(2026, 10, 1), date(2026, 11, 25)),
+    ]
+    prices = read_prices(env.file("AAPL"))
+    assert prices is not None
+    expected = {b.date: round(b.adj_close, 4) for b in env.source.data["AAPL"]}
+    assert all(bar[5] == expected[bar[0]] for bar in prices.bars)
+    assert prices.bars[-1][0] == date(2026, 11, 25)
+
+
+def test_rewrite_starts_at_min_of_universe_start_and_first_stored(env: _Env) -> None:
+    # Historique stocké plus ancien que le `start` de l'univers (ex. backfill antérieur).
+    early = _universe(("AAPL", date(2026, 9, 1)), benchmark="AAPL")
+    _initial(env, early)
+    env.source.data["AAPL"] = _scaled(env.source.data["AAPL"], close=0.5, adj=0.5)  # split 2:1
+    env.clock.now = _at(25)
+
+    outcome = env.run(SOLO)  # univers actuel : start = 1er octobre
+
+    assert _results(outcome)["AAPL"].history_rewritten is True
+    assert env.source.calls[-1] == (("AAPL",), date(2026, 9, 1), date(2026, 11, 25))
+    prices = read_prices(env.file("AAPL"))
+    assert prices is not None
+    assert prices.bars[0][0] == date(2026, 9, 1)
+
+
+class _FailsAlone(FakePriceSource):
+    """Échoue sur tout appel ne visant qu'un symbole dont la date de début précède `cutoff`."""
+
+    def __init__(self, data: dict[str, list[RawBar]], cutoff: date) -> None:
+        super().__init__(data)
+        self.cutoff = cutoff
+
+    def fetch(self, symbols: Sequence[str], start: date, end: date) -> Mapping[str, list[RawBar]]:
+        if len(symbols) == 1 and start < self.cutoff:
+            self.calls.append((tuple(symbols), start, end))
+            raise ConnectionError("téléchargement complet impossible (simulé)")
+        return super().fetch(symbols, start, end)
+
+
+def test_failed_rewrite_keeps_old_file_bytes(env: _Env) -> None:
+    _initial(env)
+    before = env.file("AAPL").read_bytes()
+    revised = {"AAPL": _scaled(env.source.data["AAPL"], adj=0.997)}
+    env.source = _FailsAlone(revised, cutoff=date(2026, 11, 1))
+    env.clock.now = _at(25)
+
+    outcome = env.run(SOLO)
+
+    aapl = _results(outcome)["AAPL"]
+    assert (aapl.status, aapl.history_rewritten, aapl.attempts) == ("failed", False, 5)
+    assert aapl.error is not None
+    assert "simulé" in aapl.error
+    assert env.file("AAPL").read_bytes() == before
+    assert env.sleep.delays == [2.0, 4.0, 8.0]
+
+
+class _AlwaysRevised(FakePriceSource):
+    """Chaque appel renvoie un historique ajusté différent (yfinance qui « oscille »)."""
+
+    def fetch(self, symbols: Sequence[str], start: date, end: date) -> Mapping[str, list[RawBar]]:
+        result = super().fetch(symbols, start, end)
+        factor = 1 - 0.01 * len(self.calls)
+        return {s: _scaled(bars, adj=factor) for s, bars in result.items()}
+
+
+def test_at_most_one_rewrite_per_ticker(env: _Env) -> None:
+    _initial(env)
+    env.source = _AlwaysRevised(env.source.data)
+    env.clock.now = _at(25)
+
+    outcome = env.run(SOLO)
+
+    assert _results(outcome)["AAPL"].history_rewritten is True
+    assert len(env.source.calls) == 2  # incrémental + un seul téléchargement complet
+
+
+def test_no_bar_for_unclosed_session(env: _Env) -> None:
+    _initial(env, day=23)
+    partial_bar = RawBar(date(2026, 11, 25), 300.0, 301.0, 299.0, 300.5, 300.5, 10.0)
+    env.source.extra["AAPL"] = [partial_bar]
+    env.clock.now = _at(25, 20, 0)  # 15 h ET : S = 24/11, la séance du 25 est en cours
+
+    outcome = env.run(SOLO)
+
+    prices = read_prices(env.file("AAPL"))
+    assert prices is not None
+    assert prices.bars[-1][0] == date(2026, 11, 24)
+    assert [(w.date, w.rule) for w in outcome.run.warnings] == [
+        (date(2026, 11, 25), "after_last_session")
+    ]
+
+
+def test_dirty_response_writes_only_valid_bars(env: _Env) -> None:
+    _initial(env)
+    stored_1120 = _stored_bar(env, date(2026, 11, 20))
+    env.source.extra["AAPL"] = [
+        RawBar(date(2026, 11, 22), 1.0, 2.0, 0.5, 1.5, 1.5, 10.0),  # dimanche
+        RawBar(date(2026, 11, 20), 1.0, float("nan"), 0.5, 1.5, 1.5, 10.0),  # doublon NaN
+    ]
+    env.clock.now = _at(25)
+
+    outcome = env.run(SOLO)
+
+    aapl = _results(outcome)["AAPL"]
+    assert (aapl.status, aapl.bars_added, aapl.history_rewritten) == ("ok", 1, False)
+    assert _stored_bar(env, date(2026, 11, 20)) == stored_1120
+    prices = read_prices(env.file("AAPL"))
+    assert prices is not None
+    assert date(2026, 11, 22) not in {b[0] for b in prices.bars}
+    assert sorted((str(w.date), w.rule) for w in outcome.run.warnings) == [
+        ("2026-11-20", "duplicate_date"),
+        ("2026-11-20", "missing_overlap_bar"),
+        ("2026-11-20", "nan"),
+        ("2026-11-22", "non_session_date"),
+    ]

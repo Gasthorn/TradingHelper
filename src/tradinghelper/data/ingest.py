@@ -17,7 +17,13 @@ from pathlib import Path
 from typing import Final, Literal
 
 from tradinghelper.config import UniverseConfig
-from tradinghelper.data.bars import OVERLAP_SESSIONS, clean_bars
+from tradinghelper.data.bars import (
+    OVERLAP_SESSIONS,
+    Cleaned,
+    clean_bars,
+    merge_overlap,
+    needs_rewrite,
+)
 from tradinghelper.data.calendar import NyseCalendar
 from tradinghelper.data.source import PriceSource, RawBar
 from tradinghelper.data.storage import (
@@ -27,12 +33,14 @@ from tradinghelper.data.storage import (
     write_prices_if_changed,
 )
 from tradinghelper.schemas import (
+    Bar,
     IngestArgs,
     IngestMode,
     IngestRun,
     IngestTickerResult,
     IngestWarning,
     PricesFile,
+    RewriteReason,
 )
 
 # Attentes entre les tentatives : 1 tentative + 3 relances (R10).
@@ -117,6 +125,7 @@ class _Plan:
     mode: IngestMode
     fetch_start: date
     stored: PricesFile | None
+    start: date  # `start` de l'univers (borne d'une réécriture complète, R4)
 
 
 def _result(
@@ -127,6 +136,7 @@ def _result(
     attempts: int = 0,
     bars_added: int = 0,
     bars_revised: int = 0,
+    rewrite_reason: RewriteReason | None = None,
     error: str | None = None,
 ) -> IngestTickerResult:
     return IngestTickerResult(
@@ -135,8 +145,8 @@ def _result(
         mode=mode,
         bars_added=bars_added,
         bars_revised=bars_revised,
-        history_rewritten=False,
-        rewrite_reason=None,
+        history_rewritten=rewrite_reason is not None,
+        rewrite_reason=rewrite_reason,
         attempts=attempts,
         error=error,
     )
@@ -186,11 +196,12 @@ class _Ingestion:
         if stored is None or not stored.bars:
             if start > self.session:
                 return _result(symbol, "unchanged", None)
-            return _Plan(symbol, "initial", start, stored)
+            return _Plan(symbol, "initial", start, stored, start)
         last = stored.bars[-1][0]
         if last >= self.session:
             return _result(symbol, "unchanged", None)
-        return _Plan(symbol, "incremental", self.calendar.shift(last, -OVERLAP_SESSIONS), stored)
+        since = self.calendar.shift(last, -OVERLAP_SESSIONS)
+        return _Plan(symbol, "incremental", since, stored, start)
 
     def fetch_one(self, symbol: str, start: date, prior_attempts: int = 0) -> _Fetched:
         """Appel individuel avec relances ; `prior_attempts` : tentatives déjà faites en lot."""
@@ -237,15 +248,10 @@ class _Ingestion:
             return _result(
                 plan.symbol, "failed", plan.mode, attempts=fetched.attempts, error=fetched.error
             )
-        cleaned = clean_bars(
-            plan.symbol,
-            fetched.bars,
-            last_session=self.session,
-            is_session=self.calendar.is_session,
-        )
-        self.warnings.extend(cleaned.warnings)
+        cleaned = self.clean(plan.symbol, fetched.bars)
         if plan.mode == "incremental":
-            raise NotImplementedError("mode incrémental : T15")
+            return self.incremental(plan, fetched.attempts, cleaned)
+        self.warnings.extend(cleaned.warnings)
         if not cleaned.bars:
             return _result(
                 plan.symbol,
@@ -254,16 +260,89 @@ class _Ingestion:
                 attempts=fetched.attempts,
                 error="aucune barre valide dans la réponse",
             )
-        written = write_prices_if_changed(
-            prices_path(self.data_root, plan.symbol), plan.symbol, cleaned.bars, self.now()
-        )
-        self.changed |= written
+        self.write(plan.symbol, cleaned.bars)
         return _result(
             plan.symbol,
             "ok",
             plan.mode,
             attempts=fetched.attempts,
             bars_added=len(cleaned.bars),
+        )
+
+    def clean(self, symbol: str, raw: Sequence[RawBar]) -> Cleaned:
+        return clean_bars(
+            symbol, raw, last_session=self.session, is_session=self.calendar.is_session
+        )
+
+    def write(self, symbol: str, bars: Sequence[Bar]) -> None:
+        path = prices_path(self.data_root, symbol)
+        self.changed |= write_prices_if_changed(path, symbol, bars, self.now())
+
+    def incremental(self, plan: _Plan, attempts: int, cleaned: Cleaned) -> IngestTickerResult:
+        """Mode incrémental (R3) : fusion du recouvrement, ou réécriture complète si l'historique
+        ajusté a changé (R4). Les avertissements ne sont retenus que pour la réponse utilisée."""
+        assert plan.stored is not None
+        stored = plan.stored.bars
+        last = stored[-1][0]
+        if not any(bar[0] > last for bar in cleaned.bars):
+            self.warnings.extend(cleaned.warnings)
+            return _result(
+                plan.symbol,
+                "failed",
+                "incremental",
+                attempts=attempts,
+                error=f"aucune barre pour des séances attendues après {last.isoformat()}",
+            )
+        if needs_rewrite(stored, cleaned.bars, since=plan.fetch_start):
+            return self.rewrite(plan, attempts)
+        merge = merge_overlap(plan.symbol, stored, cleaned.bars, since=plan.fetch_start)
+        self.warnings.extend([*cleaned.warnings, *merge.warnings])
+        self.write(plan.symbol, merge.bars)
+        return _result(
+            plan.symbol,
+            "ok",
+            "incremental",
+            attempts=attempts,
+            bars_added=merge.added,
+            bars_revised=merge.revised,
+        )
+
+    def rewrite(self, plan: _Plan, attempts: int) -> IngestTickerResult:
+        """Réécriture complète sur révision (R4) : un seul re-téléchargement, depuis
+        `min(start de l'univers, première date stockée)` ; en cas d'échec, fichier intact."""
+        assert plan.stored is not None
+        stored = plan.stored.bars
+        full_start = min(plan.start, stored[0][0])
+        refetched = self.fetch_one(plan.symbol, full_start, prior_attempts=attempts)
+        if refetched.bars is None:
+            return _result(
+                plan.symbol,
+                "failed",
+                "incremental",
+                attempts=refetched.attempts,
+                error=f"révision détectée, réécriture complète impossible : {refetched.error}",
+            )
+        cleaned = self.clean(plan.symbol, refetched.bars)
+        self.warnings.extend(cleaned.warnings)
+        if not cleaned.bars:
+            return _result(
+                plan.symbol,
+                "failed",
+                "incremental",
+                attempts=refetched.attempts,
+                error="révision détectée, réécriture complète sans barre valide",
+            )
+        old = {bar[0]: bar for bar in stored}
+        last = stored[-1][0]
+        self.write(plan.symbol, cleaned.bars)
+        return _result(
+            plan.symbol,
+            "ok",
+            "incremental",
+            attempts=refetched.attempts,
+            bars_added=sum(1 for bar in cleaned.bars if bar[0] > last),
+            bars_revised=sum(1 for bar in cleaned.bars if bar[0] in old and old[bar[0]] != bar),
+            rewrite_reason="revision",
         )
 
 

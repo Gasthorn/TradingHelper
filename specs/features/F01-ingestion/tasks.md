@@ -123,7 +123,7 @@
   - Fichiers : `src/tradinghelper/data/ingest.py` (groupage, `with_retry` autour de chaque `fetch`, relance individuelle).
   - Fini quand : tests verts ; `RecordingSleep` montre les attentes attendues.
 
-- [ ] **T15** Mode incrémental, rattrapage et réécriture sur révision — R3, R4, R7, R6
+- [x] **T15** Mode incrémental, rattrapage et réécriture sur révision — R3, R4, R7, R6
   - Tests :
     - `tests/data/test_ingest.py::test_one_new_session_adds_one_line` (diff = exactement 1 ligne ajoutée par fichier) ;
     - `::test_three_missed_sessions_add_three_lines` ;
