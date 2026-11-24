@@ -453,3 +453,23 @@ def test_license_forced_lf() -> None:
     result = _git("check-attr", "eol", "--", "LICENSE")
 
     assert result.stdout.strip() == "LICENSE: eol: lf"
+
+
+def _step_index(job: str, command: str) -> int:
+    for index, step in enumerate(_steps(job)):
+        if command in str(step.get("run", "")):
+            return index
+    raise AssertionError(f"aucune étape `{command}` dans le job {job}")
+
+
+def test_ci_dashboard_job_checks_generated_types() -> None:
+    """F08 R5 : la CI échoue si `npm run gen:types` modifie ou ajoute un fichier de src/types/.
+
+    `git status --porcelain` (et non `git diff`) détecte aussi un type non commité (nouveau
+    schéma), qu'un `git diff` ignorerait car le fichier serait non suivi.
+    """
+    gen = _step_index("dashboard", "npm run gen:types")
+    run = str(_steps("dashboard")[gen]["run"])
+
+    assert 'test -z "$(git status --porcelain -- src/types)"' in run
+    assert _step_index("dashboard", "npm ci") < gen < _step_index("dashboard", "npm run typecheck")

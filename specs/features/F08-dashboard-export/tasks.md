@@ -203,7 +203,7 @@
   - Fini quand : qualité dashboard verte ; chaque fichier généré porte l'en-tête « généré, ne pas modifier » ; un type par
     schéma de `schemas/`.
 
-- [ ] **T22** Contrôle des types en CI — R5
+- [x] **T22** Contrôle des types en CI — R5
   - Tests : `tests/test_repo_hygiene.py::test_ci_dashboard_job_checks_generated_types` (l'étape
     `npm run gen:types && git diff --exit-code -- src/types` est présente avant `npm run typecheck`).
   - Fichiers : `.github/workflows/ci.yml`, `tests/test_repo_hygiene.py`.

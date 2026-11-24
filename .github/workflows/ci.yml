@@ -52,6 +52,13 @@ jobs:
           cache-dependency-path: dashboard/package-lock.json
       - name: Installation
         run: npm ci
+      # Spec F08 R5 : types TS à jour avec schemas/. `git status` détecte aussi un type non
+      # commité (nouveau schéma), qu'un `git diff` ignorerait.
+      - name: Types générés à jour (src/types/)
+        run: |
+          npm run gen:types
+          git status --porcelain -- src/types
+          test -z "$(git status --porcelain -- src/types)"
       - name: Lint
         run: npm run lint
       - name: Typage
