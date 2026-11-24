@@ -90,7 +90,7 @@
     (`tests/test_repo_hygiene.py::test_build_module_is_pure`, ajouté : ni `os`, `pathlib`, `shutil`, `tempfile`,
     `tradinghelper.data.storage`, ni appel à `open`) ; qualité verte.
 
-- [ ] **T10** Fiche ticker et marqueurs — R6, R8, R9, R14
+- [x] **T10** Fiche ticker et marqueurs — R6, R8, R9, R14
   - Tests : `test_build.py::test_ticker_columns_and_lengths` (colonnes du §7, sans `adj_close` ni milieu de Bollinger),
     `::test_ticker_ohlcv_copied_from_bars`, `::test_ticker_indicators_rounded` (prix 4, RSI 2),
     `::test_short_history_sma200_all_null`, `::test_no_nan_in_output`, `::test_markers_buy_sell_only_sorted`

@@ -11,16 +11,28 @@ import numpy as np
 import pytest
 from pydantic import BaseModel
 
+from tradinghelper.data.calendar import NyseCalendar
 from tradinghelper.export.build import (
     MONEY_DECIMALS,
     PRICE_DECIMALS,
     RATIO_DECIMALS,
     RSI_DECIMALS,
+    build_ticker,
+    collect_markers,
     digest,
     render,
     rounded,
 )
-from tradinghelper.schemas import HealthRun, HealthValidate
+from tradinghelper.features.indicators import bollinger, rsi_wilder, sma
+from tradinghelper.schemas import (
+    PRICE_COLUMNS,
+    ExportMarker,
+    HealthRun,
+    HealthValidate,
+    PricesFile,
+    SignalsFile,
+    TickerSeries,
+)
 
 # --- Rendu, empreinte, arrondi (T9) ------------------------------------------------------------
 
@@ -112,3 +124,176 @@ def test_rounded_empty() -> None:
 def test_rounded_refuses_infinity() -> None:
     with pytest.raises(ValueError, match="infini"):
         rounded(np.array([1.0, np.inf]), 4)
+
+
+# --- Fiche ticker et marqueurs (T10) ------------------------------------------------------------
+
+CAL = NyseCalendar()
+
+
+def _prices(
+    closes: list[float], *, symbol: str = "AAPL", first: date = date(2026, 1, 2)
+) -> PricesFile:
+    """Fichier de prix valide : une séance NYSE par clôture à partir de `first`, OHLC cohérents."""
+    sessions = CAL.sessions(first, CAL.shift(first, len(closes) - 1)) if closes else []
+    bars = []
+    for i, (day, close) in enumerate(zip(sessions, closes, strict=True)):
+        close = round(close, 4)
+        open_ = round(close * 0.995, 4)
+        high = round(max(open_, close) * 1.01, 4)
+        low = round(min(open_, close) * 0.99, 4)
+        bars.append((day, open_, high, low, close, round(close * 0.98, 4), 1_000_000 + i))
+    return PricesFile.model_validate(
+        {
+            "schema_version": 1,
+            "symbol": symbol,
+            "currency": "USD",
+            "source": "yfinance",
+            "columns": list(PRICE_COLUMNS),
+            "last_updated": "2026-11-23T22:41:05Z",
+            "bars": bars,
+        }
+    )
+
+
+def _closes(n: int) -> list[float]:
+    """Série déterministe et non monotone (le RSI varie)."""
+    return [100.0 + 10.0 * math.sin(i / 5.0) + 0.05 * i for i in range(n)]
+
+
+def _signals_file(day: date, *signals: tuple[str, str, str, float]) -> SignalsFile:
+    return SignalsFile.model_validate(
+        {
+            "schema_version": 1,
+            "date": day.isoformat(),
+            "generated_at": f"{day.isoformat()}T22:45:00Z",
+            "signals": [
+                {"strategy_id": strategy, "symbol": symbol, "action": action,
+                 "confidence": confidence, "target_weight": 0.05, "horizon_days": 5}
+                for strategy, symbol, action, confidence in signals
+            ],
+        }
+    )  # fmt: skip
+
+
+def test_ticker_columns_and_lengths() -> None:
+    """R6 : colonnes du §7, sans `adj_close` ni milieu de Bollinger, toutes de même longueur."""
+    ticker = build_ticker(_prices(_closes(250)), [])
+
+    series = ticker.series.model_dump()
+    assert list(series) == list(TickerSeries.model_fields)
+    assert "adj_close" not in series
+    assert {len(column) for column in series.values()} == {250}
+    assert ticker.symbol == "AAPL"
+    assert ticker.schema_version == 1
+
+
+def test_ticker_ohlcv_copied_from_bars() -> None:
+    prices = _prices(_closes(30))
+
+    series = build_ticker(prices, []).series
+
+    assert series.date == [bar[0] for bar in prices.bars]
+    assert series.open == [bar[1] for bar in prices.bars]
+    assert series.high == [bar[2] for bar in prices.bars]
+    assert series.low == [bar[3] for bar in prices.bars]
+    assert series.close == [bar[4] for bar in prices.bars]
+    assert series.volume == [bar[6] for bar in prices.bars]
+
+
+def test_ticker_indicators_match_functions_and_are_rounded() -> None:
+    """Indicateurs sur `close` (R7), arrondis : prix à 4 décimales, RSI à 2 (R14)."""
+    prices = _prices(_closes(250))
+    close = np.array([bar[4] for bar in prices.bars])
+
+    series = build_ticker(prices, []).series
+
+    _middle, upper, lower = bollinger(close, 20, 2.0)
+    assert series.sma20 == rounded(sma(close, 20), 4)
+    assert series.sma50 == rounded(sma(close, 50), 4)
+    assert series.sma200 == rounded(sma(close, 200), 4)
+    assert series.bb_upper == rounded(upper, 4)
+    assert series.bb_lower == rounded(lower, 4)
+    assert series.rsi14 == rounded(rsi_wilder(close, 14), 2)
+    assert all(v is None or round(v, 2) == v for v in series.rsi14)
+    assert all(v is None or round(v, 4) == v for v in series.sma20 + series.bb_upper)
+
+
+def test_short_history_sma200_all_null() -> None:
+    series = build_ticker(_prices(_closes(50)), []).series
+
+    assert series.sma200 == [None] * 50
+    assert series.sma20[:19] == [None] * 19
+    assert series.sma20[19] is not None
+    assert series.rsi14[:14] == [None] * 14
+
+
+def test_single_bar_ticker() -> None:
+    series = build_ticker(_prices([123.45]), []).series
+
+    assert series.close == [123.45]
+    assert series.rsi14 == [None]
+
+
+def test_no_nan_in_output() -> None:
+    content = render(build_ticker(_prices(_closes(220)), []))
+
+    assert b"NaN" not in content
+    assert b"Infinity" not in content
+    assert b"null" in content  # warm-up
+
+
+def test_ticker_carries_given_markers() -> None:
+    marker = ExportMarker(date=date(2026, 1, 5), strategy_id="s", action="BUY", confidence=0.6)
+
+    assert build_ticker(_prices(_closes(5)), [marker]).markers == [marker]
+
+
+def test_markers_buy_sell_only_sorted() -> None:
+    """R9 : HOLD exclus ; tri par date puis `strategy_id`, quel que soit l'ordre des fichiers."""
+    nov23 = (("zeta", "AAPL", "SELL", 0.61), ("alpha", "AAPL", "BUY", 0.7))
+    files = [
+        _signals_file(date(2026, 11, 23), *nov23),
+        _signals_file(date(2026, 11, 21), ("alpha", "AAPL", "HOLD", 0.5)),
+        _signals_file(date(2026, 11, 20), ("alpha", "AAPL", "BUY", 0.67)),
+    ]
+
+    markers = collect_markers(files, {"AAPL"})["AAPL"]
+
+    assert [(m.date, m.strategy_id, m.action) for m in markers] == [
+        (date(2026, 11, 20), "alpha", "BUY"),
+        (date(2026, 11, 23), "alpha", "BUY"),
+        (date(2026, 11, 23), "zeta", "SELL"),
+    ]
+    assert markers[0].confidence == 0.67
+
+
+def test_markers_ignore_unexported_symbols() -> None:
+    files = [
+        _signals_file(date(2026, 11, 20), ("a", "TSLA", "BUY", 0.6), ("a", "MSFT", "SELL", 0.6))
+    ]
+
+    markers = collect_markers(files, {"AAPL", "MSFT"})
+
+    assert markers == {"AAPL": [], "MSFT": [markers["MSFT"][0]]}
+    assert "TSLA" not in markers
+
+
+def test_markers_date_from_file() -> None:
+    (marker,) = collect_markers(
+        [_signals_file(date(2026, 11, 20), ("a", "AAPL", "BUY", 0.6))], {"AAPL"}
+    )["AAPL"]
+
+    assert marker.date == date(2026, 11, 20)
+
+
+def test_markers_confidence_rounded() -> None:
+    (marker,) = collect_markers(
+        [_signals_file(date(2026, 11, 20), ("a", "AAPL", "BUY", 0.123456))], {"AAPL"}
+    )["AAPL"]
+
+    assert marker.confidence == 0.1235
+
+
+def test_markers_without_signals() -> None:
+    assert collect_markers([], {"AAPL", "SPY"}) == {"AAPL": [], "SPY": []}
