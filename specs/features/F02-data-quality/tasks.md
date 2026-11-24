@@ -141,11 +141,11 @@
     - contre-épreuve : `high` mis à 1.0 au 2026-11-20 dans la copie d'AAPL → `AAPL 2026-11-20 ohlc_inconsistent: …` sur stderr, code 1 ;
     - dossier temporaire supprimé, `git status` propre, pas de dossier `data/` dans le dépôt.
 
-- [ ] **T_final** Vérification : tous les critères d'acceptation de la spec (→ `/spec-verify F02`) — R1–R8
+- [x] **T_final** Vérification : tous les critères d'acceptation de la spec (→ `/spec-verify F02`) — R1–R8
   - Tests : suite complète ; chacun des 14 critères est relié à un test nommé ou à la preuve de T15.
   - Fichiers : `specs/features/F02-data-quality/spec.md` (cases cochées avec leur preuve, statut), `specs/roadmap.md`.
   - Fini quand : 14/14 critères cochés avec preuve ; qualité verte ; CI verte sur la PR.
-  - Avancement (2026-11-24) : 14/14 critères cochés avec preuve dans `spec.md` ; suite locale verte (524 tests, ruff, mypy, `schemas/` synchronisé, build et `check:dist` du dashboard OK). Reste : CI verte sur la PR (branche non poussée), puis validation humaine → ✔️ Done.
+  - Preuve : 14/14 critères cochés avec preuve dans `spec.md` (commit 24231ee) ; suite locale verte (524 tests, ruff, mypy, `schemas/` synchronisé, build et `check:dist` du dashboard) ; CI verte sur la PR #6 (jobs `python` et `dashboard`, run 45497479832, commit b4cb690, après correction d'un test d'aide sensible aux codes ANSI sur GitHub Actions) ; F02 validée Done le 2026-11-24.
 
 ## Couverture exigences → tâches
 | Exigence | Tâches |
