@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
+from hypothesis.extra.numpy import arrays
 
 from tradinghelper.features.indicators import bollinger, rsi_wilder, sma
 
@@ -169,3 +173,70 @@ def test_rsi_input_not_modified() -> None:
     rsi_wilder(x, 14)
 
     np.testing.assert_array_equal(x, before)
+
+
+# --- Anti-look-ahead et warm-up des indicateurs exportés (T4) ------------------------------------
+
+Indicator = Callable[[np.ndarray[Any, np.dtype[np.float64]]], np.ndarray[Any, Any]]
+
+#: Indicateurs exportés par F08 (R6), sous forme « série → série ».
+EXPORTED: dict[str, Indicator] = {
+    "sma20": lambda x: sma(x, 20),
+    "sma50": lambda x: sma(x, 50),
+    "sma200": lambda x: sma(x, 200),
+    "bb_upper": lambda x: bollinger(x, n=20, k=2.0)[1],
+    "bb_lower": lambda x: bollinger(x, n=20, k=2.0)[2],
+    "rsi14": lambda x: rsi_wilder(x, 14),
+}
+
+#: Nombre de `NaN` de warm-up attendus (critère d'acceptation R8).
+WARMUP = {"sma20": 19, "sma50": 49, "sma200": 199, "bb_upper": 19, "bb_lower": 19, "rsi14": 14}
+
+#: Longueur tirée explicitement : `st.lists` ne dépasse guère une dizaine d'éléments, ce qui
+#: laisserait tous les indicateurs en warm-up et rendrait la propriété vide (vérifié par mutation).
+prices = arrays(
+    np.float64,
+    st.integers(min_value=2, max_value=400),
+    elements=st.floats(min_value=0.01, max_value=10_000.0, allow_nan=False, allow_infinity=False),
+)
+
+
+def _lookahead_free_at(indicator: Indicator, x: np.ndarray[Any, Any], t: int) -> bool:
+    """La valeur à `t` calculée sur `x[: t + 1]` est identique (NaN compris) à celle sur `x`."""
+    truncated = indicator(x[: t + 1])[t]
+    full = indicator(x)[t]
+    return bool(np.array_equal(truncated, full, equal_nan=True))
+
+
+@pytest.mark.parametrize("name", sorted(EXPORTED))
+@given(x=prices, data=st.data())
+def test_no_lookahead(name: str, x: np.ndarray[Any, Any], data: st.DataObject) -> None:
+    """P1 / R8 : un indicateur à la date `t` ne dépend que des barres `<= t`.
+
+    `t` < dernière barre : sinon la série tronquée est la série complète et le test est vide.
+    """
+    t = data.draw(st.integers(min_value=0, max_value=x.size - 2), label="t")
+
+    assert _lookahead_free_at(EXPORTED[name], x, t)
+
+
+def test_lookahead_detector_catches_centered_window() -> None:
+    """Garde-fou : une moyenne centrée (qui lit le futur) est bien détectée."""
+
+    def centered(x: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
+        out = np.full(x.shape, np.nan)
+        for t in range(1, x.size - 1):
+            out[t] = x[t - 1 : t + 2].mean()
+        return out
+
+    x = np.array([1.0, 2.0, 4.0, 8.0, 16.0])
+
+    assert not _lookahead_free_at(centered, x, 2)
+
+
+@pytest.mark.parametrize("name", sorted(EXPORTED))
+def test_warmup_lengths(name: str) -> None:
+    result = EXPORTED[name](np.linspace(50.0, 150.0, 300))
+
+    assert np.isnan(result[: WARMUP[name]]).all()
+    assert not np.isnan(result[WARMUP[name] :]).any()

@@ -37,7 +37,7 @@
   - Fichiers : `src/tradinghelper/features/indicators.py` (`rsi_wilder`), `tests/features/test_indicators.py`, fixture.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T4** Propriété anti-look-ahead et warm-up des indicateurs exportés — R8
+- [x] **T4** Propriété anti-look-ahead et warm-up des indicateurs exportés — R8
   - Tests : `test_indicators.py::test_no_lookahead` (hypothesis : série de prix positifs de longueur 1–400, `t` quelconque ;
     pour SMA20/50/200, Bollinger et RSI14, la valeur à `t` calculée sur `x[:t+1]` est égale, `NaN` compris, à celle calculée
     sur `x`), `::test_warmup_lengths[sma20=19|sma50=49|sma200=199|bb=19|rsi14=14]`.
