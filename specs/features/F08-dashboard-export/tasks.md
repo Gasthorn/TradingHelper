@@ -218,13 +218,23 @@
   - Fichiers : `README.md`, `CLAUDE.md` (modules, commande `uv run th export [--out DIR]`), `specs/02-architecture.md`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T24** Smoke test réel (manuel, réseau) — R1, R12, R19
+- [x] **T24** Smoke test réel (manuel, réseau) — R1, R12, R19
   - Tests : aucun test automatisé (réseau interdit dans `pytest`). Procédure :
     `TH_DATA_DIR=<tmp> uv run th ingest`, `TH_DATA_DIR=<tmp> uv run th validate`, `TH_DATA_DIR=<tmp> uv run th export --out <tmp>/export`,
     puis un 2e `th export` ; `dashboard/` : `npm run dev` avec l'export copié dans `public/data/`.
   - Fichiers : aucun fichier de production ; résultat consigné dans cette tâche (tailles réelles, `data_as_of`, durée).
   - Fini quand : code 0 ; 21 fichiers `tickers/` ; tailles réelles sous les cibles ; les deux exports ne diffèrent que par
     `generated_at` ; `manifest.json` chargé sans erreur dans le navigateur.
+  - Résultat (2026-11-24, 23:39 UTC, `TH_DATA_DIR` temporaire hors dépôt) :
+    - `th ingest` : code 0, 21 symboles mis à jour, 0 échec, S = 2026-11-24, 20 s ;
+    - `th validate` : code 0, 21 fichiers, 0 violation, 0 avertissement ;
+    - `th export` : code 0, 24 fichiers (21 `tickers/`), 8,1 Mo au total, `data_as_of` 2026-11-24,
+      `git_sha` renseigné, 4,9 s par export ; données sources identiques avant/après (SHA-256) ;
+    - tailles réelles (4 250 séances, 2010-01-04 → 2026-11-24, près de 17 ans) : `tickers/` 344,6 à
+      412,8 Ko (SPY), `overview.json` 9,9 Ko, `manifest.json` 4,6 Ko, `health.json` 1,8 Ko ;
+    - 2e export : seul `generated_at` diffère dans `manifest.json`, les 23 autres fichiers sont identiques ;
+    - dashboard (`npm run dev`, export copié dans `public/data/`) : `manifest.json` chargé, les 23 fichiers
+      listés servis avec empreinte et taille conformes, fiche AAPL lisible, aucune erreur console.
 
 - [ ] **T_final** Vérification : tous les critères d'acceptation M1 de la spec (→ `/spec-verify F08`)
 
