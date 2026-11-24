@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "session_date": "2026-11-23",
+  "ingest": [
+    {
+      "started_at": "2026-11-23T22:31:02Z",
+      "finished_at": "2026-11-23T22:32:10Z",
+      "duration_s": 68.4,
+      "args": {
+        "symbols": null,
+        "full": false,
+        "start": null
+      },
+      "exit_code": 0,
+      "tickers": [
+        {
+          "symbol": "AAPL",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 0,
+          "history_rewritten": true,
+          "rewrite_reason": "revision",
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "MSFT",
+          "status": "failed",
+          "mode": "incremental",
+          "bars_added": 0,
+          "bars_revised": 0,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 4,
+          "error": "HTTP 429"
+        },
+        {
+          "symbol": "SPY",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 0,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        }
+      ],
+      "warnings": []
+    }
+  ],
+  "validate": [
+    {
+      "started_at": "2026-11-23T22:32:15Z",
+      "finished_at": "2026-11-23T22:32:16Z",
+      "duration_s": 0.9,
+      "args": {
+        "symbols": null,
+        "all_history": false
+      },
+      "exit_code": 0,
+      "files_checked": 3,
+      "violations": [],
+      "warnings": [
+        {
+          "symbol": "MSFT",
+          "rule": "large_move",
+          "start": "2026-11-23",
+          "end": "2026-11-23",
+          "value": 0.42
+        }
+      ]
+    }
+  ]
+}

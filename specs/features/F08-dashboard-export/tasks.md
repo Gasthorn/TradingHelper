@@ -132,7 +132,7 @@
     seedée, OHLC cohérents, prix à 4 décimales, sérialisation canonique via `storage.dumps_prices`), `tests/test_synthetic.py`.
   - Fini quand : tests verts ; génération de 21 × 3 780 barres < 5 s ; qualité verte.
 
-- [ ] **T15** Lecture des sources — R13, R3
+- [x] **T15** Lecture des sources — R13, R3
   - Préalable : fixtures `tests/fixtures/export/signals/` (BUY le 2026-11-20, HOLD le 2026-11-21, SELL le 2026-11-23
     sur AAPL, plus `latest.json`) et `tests/fixtures/export/runs/` (rapports valides).
   - Tests : `tests/export/test_dashboard.py::test_read_sources_prices_only` (pas de `runs/` ni `signals/` → listes vides),

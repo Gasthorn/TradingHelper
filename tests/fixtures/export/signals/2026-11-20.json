@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-20",
+  "generated_at": "2026-11-20T22:45:00Z",
+  "signals": [
+    {
+      "strategy_id": "lgbm_dir5_v3",
+      "symbol": "AAPL",
+      "action": "BUY",
+      "confidence": 0.67,
+      "target_weight": 0.08,
+      "horizon_days": 5
+    },
+    {
+      "strategy_id": "lgbm_dir5_v3",
+      "symbol": "MSFT",
+      "action": "HOLD",
+      "confidence": 0.5,
+      "target_weight": 0.0,
+      "horizon_days": 5
+    }
+  ]
+}
