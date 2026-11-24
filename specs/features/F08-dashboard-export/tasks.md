@@ -9,7 +9,7 @@
 
 ## Dépendances
 
-- [ ] **T1** Dépendances Python : `numpy` direct, `hypothesis` et `jsonschema` en dev — R7, R8, R1
+- [x] **T1** Dépendances Python : `numpy` direct, `hypothesis` et `jsonschema` en dev — R7, R8, R1
   - Tests : `tests/test_repo_hygiene.py::test_provider_packages_importable` étendu à `numpy`, `hypothesis`, `jsonschema`
     (paramètres ajoutés, test existant).
   - Fichiers : `pyproject.toml` (`numpy>=2.5` dans `dependencies` ; `hypothesis`, `jsonschema` dans le groupe `dev`), `uv.lock`.

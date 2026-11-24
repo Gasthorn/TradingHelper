@@ -1,6 +1,6 @@
 # F08 — Export des données pour le dashboard
 
-- **Statut** : 🧭 Planned (M1, 2026-11-24) — M3 : ✅ Approved, plan à compléter
+- **Statut** : 🚧 In progress (M1) — M3 : ✅ Approved, plan à compléter
 - **Milestone** : M1 (partiel : exigences et critères `[M1]`) puis M3 (complet : `[M3]`)
 - **Dépend de** : F01, F02 (M1) ; F04–F07 pour les sections `[M3]`
 - **Contrats** : `03-data-contracts.md` §7 (production) ; §1, §2, §6 (lecture) ; §3, §4, §5 (lecture, M3)

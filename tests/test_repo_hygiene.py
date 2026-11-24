@@ -7,6 +7,7 @@ import importlib
 import re
 import socket
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -121,13 +122,35 @@ PROVIDER_MODULES = {
 }
 
 
-@pytest.mark.parametrize("package", sorted(PROVIDER_MODULES))
+#: F08 (T1) : paquets importés directement, non confinés à un module.
+DIRECT_PACKAGES = ("numpy", "hypothesis", "jsonschema")
+
+
+@pytest.mark.parametrize("package", sorted(PROVIDER_MODULES) + list(DIRECT_PACKAGES))
 # À l'import, urllib3 (tiré par yfinance) sonde IPv6 en créant une socket locale sur `::1`, sans
 # réseau, et ignore l'échec : pytest-socket la bloque et émet ce UserWarning, sans conséquence.
 @pytest.mark.filterwarnings("ignore:A test tried to use socket:UserWarning")
 def test_provider_packages_importable(package: str) -> None:
-    """F01 R5, R16 : dépendances déclarées et importables sans réseau."""
+    """F01 R5, R16, F08 R7/R8/R1 : dépendances déclarées et importables sans réseau."""
     importlib.import_module(package)
+
+
+def _declared(requirements: list[str]) -> set[str]:
+    """Noms de paquets d'une liste de spécifications PEP 508 (`numpy>=2.5` → `numpy`)."""
+    return {re.split(r"[<>=!~;\[ ]", req, maxsplit=1)[0].lower() for req in requirements}
+
+
+def test_direct_dependencies_declared() -> None:
+    """F08 (plan) : numpy importé par `features/` est une dépendance directe, pas seulement
+    transitive ; hypothesis et jsonschema ne servent qu'aux tests (groupe `dev`)."""
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    runtime = _declared(pyproject["project"]["dependencies"])
+    dev = _declared(pyproject["dependency-groups"]["dev"])
+
+    assert "numpy" in runtime
+    assert {"hypothesis", "jsonschema"} <= dev
+    assert not {"hypothesis", "jsonschema"} & runtime
 
 
 @pytest.mark.parametrize(("package", "allowed"), sorted(PROVIDER_MODULES.items()))
