@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Final
 
+from tradinghelper.data.quality import ohlc_consistent
 from tradinghelper.data.source import RawBar
 from tradinghelper.schemas import PRICE_DECIMALS, Bar, IngestWarning, WarningRule
 
@@ -54,7 +55,7 @@ def _validate(
     if raw.volume < 0:
         return "negative_volume"
     # Après arrondi : c'est la barre écrite qui doit respecter le contrat.
-    if low > min(open_, close) or high < max(open_, close):
+    if not ohlc_consistent(open_=open_, high=high, low=low, close=close):
         return "ohlc_inconsistent"
     return (raw.date, open_, high, low, close, adj_close, round(raw.volume))
 

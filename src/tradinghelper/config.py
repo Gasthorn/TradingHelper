@@ -171,6 +171,17 @@ class StrategiesConfig(_Strict):
         return strategies
 
 
+def universe_targets(universe: UniverseConfig) -> list[tuple[str, date]]:
+    """Symboles traités par le pipeline : tickers de l'univers puis benchmark, sans doublon.
+
+    Le benchmark prend le plus ancien `start` des tickers (F01 R1, décision F00 Q3).
+    """
+    targets = [(t.symbol, t.start) for t in universe.tickers]
+    if universe.benchmark not in {symbol for symbol, _ in targets}:
+        targets.append((universe.benchmark, min(start for _, start in targets)))
+    return targets
+
+
 class AppConfig(_Strict):
     config_dir: Path
     universe: UniverseConfig

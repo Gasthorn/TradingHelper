@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections import Counter
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
@@ -14,18 +15,27 @@ from typer._click import Context as _ClickContext
 from typer.core import TyperGroup
 
 from tradinghelper import __version__
-from tradinghelper.config import AppConfig, ConfigError, find_repo_root, load_config
+from tradinghelper.config import (
+    AppConfig,
+    ConfigError,
+    find_repo_root,
+    load_config,
+    universe_targets,
+)
 from tradinghelper.data.calendar import NyseCalendar
 from tradinghelper.data.ingest import IngestOutcome, IngestRequest
 from tradinghelper.data.ingest import ingest as run_ingest
 from tradinghelper.data.source import PriceSource, YFinanceSource
 from tradinghelper.data.storage import (
     RunReportError,
+    append_run_report_entry,
     data_dir,
     run_report_path,
     update_run_report,
 )
-from tradinghelper.schemas import write_json_schemas
+from tradinghelper.data.validate import ValidateOutcome, ValidateRequest
+from tradinghelper.data.validate import validate as run_validate
+from tradinghelper.schemas import ValidateViolation, write_json_schemas
 
 # Commandes qui n'ont pas besoin d'une config valide.
 CONFIG_EXEMPT_COMMANDS: frozenset[str] = frozenset({"schemas"})
@@ -109,23 +119,28 @@ def _usage_error(message: str) -> typer.Exit:
     return typer.Exit(code=USAGE_ERROR_EXIT_CODE)
 
 
+def _parse_symbols(config: AppConfig, symbols: str | None) -> tuple[str, ...] | None:
+    """`--symbols A,B` : symboles de l'univers ou benchmark (F01 R13, F02 R5) ; sinon code 2."""
+    if symbols is None:
+        return None
+    known = [symbol for symbol, _ in universe_targets(config.universe)]
+    parts = [part.strip().upper() for part in symbols.split(",") if part.strip()]
+    if not parts:
+        raise _usage_error("--symbols ne contient aucun symbole")
+    unknown = [part for part in parts if part not in known]
+    if unknown:
+        raise _usage_error(
+            f"symbole(s) hors univers et hors benchmark : {', '.join(unknown)} "
+            f"(connus : {', '.join(known)})"
+        )
+    return tuple(dict.fromkeys(parts))
+
+
 def _parse_request(
     config: AppConfig, symbols: str | None, full: bool, start: str | None, today: date
 ) -> IngestRequest:
     """Valide les options de `th ingest` avant tout appel réseau (R13) ; sinon code 2."""
-    known = [t.symbol for t in config.universe.tickers] + [config.universe.benchmark]
-    selected: tuple[str, ...] | None = None
-    if symbols is not None:
-        parts = [part.strip().upper() for part in symbols.split(",") if part.strip()]
-        if not parts:
-            raise _usage_error("--symbols ne contient aucun symbole")
-        unknown = [part for part in parts if part not in known]
-        if unknown:
-            raise _usage_error(
-                f"symbole(s) hors univers et hors benchmark : {', '.join(unknown)} "
-                f"(connus : {', '.join(known)})"
-            )
-        selected = tuple(dict.fromkeys(parts))
+    selected = _parse_symbols(config, symbols)
     start_date: date | None = None
     if start is not None:
         if not full:
@@ -202,6 +217,78 @@ def ingest(
             update_run_report(report, outcome.session, outcome.run)
         except RunReportError as err:
             # Les prix sont déjà écrits ; le rapport existant n'est jamais écrasé (P7).
+            typer.echo(f"Erreur : rapport de run non écrit : {err}", err=True)
+        else:
+            typer.echo(f"Rapport : {report.as_posix()}")
+    else:
+        typer.echo("Rien à signaler : aucun rapport écrit.")
+    raise typer.Exit(code=outcome.run.exit_code)
+
+
+# --- th validate (F02) -------------------------------------------------------------------------
+
+
+def _validate_summary(outcome: ValidateOutcome) -> list[str]:
+    run = outcome.run
+    lines = [
+        f"Séance {outcome.session.isoformat()} : {run.files_checked} fichier(s) vérifié(s), "
+        f"{len(run.violations)} violation(s), {len(run.warnings)} avertissement(s)."
+    ]
+    counts = Counter(w.rule for w in run.warnings)
+    if counts:
+        lines.append(
+            "Avertissements : " + ", ".join(f"{rule}: {n}" for rule, n in sorted(counts.items()))
+        )
+    return lines
+
+
+def _violation_line(violation: ValidateViolation) -> str:
+    day = violation.date.isoformat() if violation.date is not None else "-"
+    return f"{violation.symbol} {day} {violation.rule}: {violation.detail}"
+
+
+@app.command()
+def validate(
+    ctx: typer.Context,
+    symbols: Annotated[
+        str | None,
+        typer.Option(
+            help="Symboles à valider, séparés par des virgules (défaut : tous les fichiers, "
+            "y compris hors univers ; avec cette option, les fichiers non listés sont ignorés)."
+        ),
+    ] = None,
+    all_history: Annotated[
+        bool,
+        typer.Option(
+            "--all-history",
+            help="Avertissements sur tout l'historique (défaut : les 10 dernières séances).",
+        ),
+    ] = False,
+) -> None:
+    """Valide les fichiers de prix de data/raw/prices/ (lecture seule).
+
+    Code 1 si une règle bloquante est violée, 0 sinon (avertissements compris), 2 en cas
+    d'erreur de configuration ou d'arguments.
+    """
+    config: AppConfig = ctx.obj
+    request = ValidateRequest(symbols=_parse_symbols(config, symbols), all_history=all_history)
+    data_root = data_dir()
+    outcome = run_validate(
+        config.universe, request, calendar=NyseCalendar(), now=_now, data_root=data_root
+    )
+    for violation in outcome.run.violations:
+        typer.echo(_violation_line(violation), err=True)
+    for line in _validate_summary(outcome):
+        typer.echo(line)
+    # R7 : rapport écrit s'il existe déjà pour S (le daily l'a ouvert) ou s'il y a une violation ;
+    # sinon (jour férié, 2e run) rien n'est écrit, pour ne pas créer de commit. Toujours avant
+    # la sortie, y compris en code 1 (téléversé par F10 R4).
+    report = run_report_path(data_root, outcome.session)
+    if report.exists() or outcome.has_violations:
+        try:
+            append_run_report_entry(report, outcome.session, "validate", outcome.run)
+        except RunReportError as err:
+            # Rapport existant jamais écrasé (P7) ; code de sortie de la validation inchangé.
             typer.echo(f"Erreur : rapport de run non écrit : {err}", err=True)
         else:
             typer.echo(f"Rapport : {report.as_posix()}")

@@ -89,7 +89,7 @@ de façon incrémentale, atomique, idempotente et diffable dans `data/raw/prices
   `sleep` DOIVENT être injectables. Aucun appel réseau dans `pytest` (`FakePriceSource`).
 - **R17** Les modèles `PricesFile` et `RunReport` (section `ingest`) DOIVENT être définis dans `schemas.py` ; F01 crée la
   commande `th schemas` (sans config requise) qui génère `schemas/prices.schema.json` et `schemas/run_report.schema.json`.
-  Le contrôle de synchronisation en CI reste dans F02 R6.
+  Le contrôle de synchronisation en CI est assuré par `pytest` (`test_generated_schemas_match_committed`).
 
 ## Critères d'acceptation
 - [x] Avec une `FakePriceSource` et sans `data/raw/prices/`, un run initial crée un fichier par ticker + `SPY.json`, conformes au JSON Schema `prices` et à la sérialisation canonique. (R1, R2, R8, R17) — Preuve : `test_ingest.py::test_initial_run_creates_all_files_including_benchmark` ; JSON Schema vérifié par `jsonschema` (Draft 2020-12) sur les fichiers produits, et `test_schemas.py::test_generated_schemas_match_committed`.
@@ -121,7 +121,7 @@ de façon incrémentale, atomique, idempotente et diffable dans `data/raw/prices
 - **Q2** Seuil de révision : tolérance quasi nulle `1e-4` sur `close` et `adj_close` (au lieu de 0,5 % sur `adj_close`), pour capter tous les dividendes et garder un facteur `adj_close/close` cohérent (R4).
 - **Q3** Réécriture et P5 : journalisée dans le rapport et dans le message de commit (F10 R2), pas d'ADR.
 - **Q4** Backfill : symboles de l'univers ou benchmark uniquement ; `--full` + `--start` optionnel ; pas de `--end` (évite les trous) (R13).
-- **Q5** Barres invalides : écartées par F01 avec avertissement, pour qu'un ticker isolé ne bloque pas tout le daily via F02 R4 (R6).
+- **Q5** Barres invalides : écartées par F01 avec avertissement, pour qu'un ticker isolé ne bloque pas tout le daily via F02 R6 (R6).
 - **Q6** Benchmark : `start = min(start des tickers)`, traité comme un ticker (R1).
 - **Q7** Dépendances : voir section ci-dessus.
 - **Q8** Colonnes : `auto_adjust=False` ; OHLC ajustés des splits, `adj_close` ajusté splits + dividendes ; les features calculent le facteur `adj_close/close` (R5, contrat §2).

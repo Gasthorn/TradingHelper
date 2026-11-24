@@ -1,0 +1,255 @@
+"""Règles de qualité des données (F02 R2, R3) : fonctions pures, sans E/S ni horloge.
+
+Le calendrier NYSE y entre sous forme de fonctions (`is_session`) ou de listes de séances, pour
+garder ces règles testables isolément (CLAUDE.md : fonctions pures isolées des effets de bord).
+"""
+
+from __future__ import annotations
+
+import itertools
+import math
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from datetime import date
+from typing import Final
+
+from pydantic import JsonValue
+
+from tradinghelper.schemas import (
+    PRICE_DECIMALS,
+    Bar,
+    BlockingRule,
+    ValidateViolation,
+    ValidateWarning,
+)
+
+ROW_LENGTH = 7  # date, open, high, low, close, adj_close, volume (contrat §2)
+
+# Saut de cours (F02, définitions) : |ln(close_t / close_{t-1})| > ln(1,4), soit +40 % ou -28,6 %.
+LARGE_MOVE_LOG: Final = math.log(1.4)
+
+# Fenêtre récente (F02, définitions) : les séances S - 9 … S.
+RECENT_SESSIONS: Final = 10
+
+# Stale : dernière date strictement antérieure à S - 3 séances.
+STALE_SESSIONS: Final = 3
+
+# Décimales de la variation simple journalisée dans `value`.
+VALUE_DECIMALS: Final = 4
+
+
+@dataclass(frozen=True)
+class RowCheck:
+    """Résultat de `check_rows` : barres typées (vides dès qu'une violation existe) et
+    violations bloquantes, dans l'ordre des lignes."""
+
+    bars: list[Bar] = field(default_factory=list)
+    violations: list[ValidateViolation] = field(default_factory=list)
+
+
+def ohlc_consistent(*, open_: float, high: float, low: float, close: float) -> bool:
+    """`low <= min(open, close)` et `high >= max(open, close)` (contrat §2).
+
+    Prédicat partagé par le nettoyage de F01 (`bars.py`) et la validation de F02.
+    """
+    return low <= min(open_, close) and high >= max(open_, close)
+
+
+def _parse_date(value: JsonValue) -> date | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _parse_row(row: JsonValue) -> Bar | str:
+    """`row` convertie en `Bar` si elle a la forme `[date, 5 nombres, entier]`, sinon la raison.
+
+    Aucune règle de contenu ici (prix > 0, OHLC…) : seulement la forme et les types.
+    """
+    if not isinstance(row, list):
+        return f"ligne attendue sous forme de liste, reçu {type(row).__name__}"
+    if len(row) != ROW_LENGTH:
+        return f"{len(row)} éléments au lieu de {ROW_LENGTH}"
+    day = _parse_date(row[0])
+    if day is None:
+        return f"date illisible {row[0]!r} (attendu AAAA-MM-JJ)"
+    prices: list[float] = []
+    for position, value in enumerate(row[1:6], start=1):
+        if not isinstance(value, int | float) or isinstance(value, bool):
+            return f"élément {position} : nombre attendu, reçu {value!r}"
+        prices.append(float(value))
+    volume = row[6]
+    # `bool` est un sous-type d'`int` en Python : refusé explicitement.
+    if not isinstance(volume, int) or isinstance(volume, bool):
+        return f"volume : entier attendu, reçu {volume!r}"
+    open_, high, low, close, adj_close = prices
+    return (day, open_, high, low, close, adj_close, volume)
+
+
+def check_rows(
+    symbol: str,
+    rows: Sequence[JsonValue],
+    *,
+    last_session: date,
+    is_session: Callable[[date], bool],
+) -> RowCheck:
+    """Applique les règles bloquantes de F02 R2 à toutes les lignes de `bars`.
+
+    Toutes les violations sont rapportées, y compris plusieurs sur une même ligne ; une ligne de
+    forme invalide (`schema`) n'est pas examinée plus avant mais n'arrête pas les suivantes.
+    `is_session` peut lever `ValueError` hors de la plage du calendrier : `non_session_date`.
+    """
+    violations: list[ValidateViolation] = []
+
+    def report(day: date | None, rule: BlockingRule, detail: str) -> None:
+        violations.append(ValidateViolation(symbol=symbol, date=day, rule=rule, detail=detail))
+
+    if not rows:
+        report(None, "empty_bars", "aucune barre")
+        return RowCheck(violations=violations)
+
+    bars: list[Bar] = []
+    previous: date | None = None
+    for row in rows:
+        parsed = _parse_row(row)
+        if isinstance(parsed, str):
+            readable_day = _parse_date(row[0]) if isinstance(row, list) and row else None
+            report(readable_day, "schema", parsed)
+            continue
+        day = parsed[0]
+        where = day.isoformat()
+
+        if previous is not None and day <= previous:
+            report(
+                day,
+                "dates_not_increasing",
+                f"{where} : date non strictement postérieure à {previous.isoformat()}",
+            )
+        previous = day if previous is None or day > previous else previous
+        try:
+            session = is_session(day)
+        except ValueError:  # hors de la plage du calendrier
+            session = False
+        if not session:
+            report(day, "non_session_date", f"{where} n'est pas une séance NYSE")
+        if day > last_session:
+            report(
+                day,
+                "after_last_session",
+                f"{where} postérieure à la dernière séance clôturée {last_session.isoformat()}",
+            )
+
+        _, open_, high, low, close, adj_close, volume = parsed
+        prices = {"open": open_, "high": high, "low": low, "close": close, "adj_close": adj_close}
+        invalid = {name: p for name, p in prices.items() if not (math.isfinite(p) and p > 0)}
+        if invalid:
+            listed = ", ".join(f"{name}={p!r}" for name, p in invalid.items())
+            report(day, "non_positive_price", f"{where} : prix non strictement positif ({listed})")
+        unrounded = [
+            f"{name}={p!r}"
+            for name, p in prices.items()
+            if name not in invalid and round(p, PRICE_DECIMALS) != p
+        ]
+        if unrounded:
+            report(
+                day,
+                "not_rounded",
+                f"{where} : prix non arrondi à {PRICE_DECIMALS} décimales ({', '.join(unrounded)})",
+            )
+        if volume < 0:
+            report(day, "negative_volume", f"{where} : volume {volume} < 0")
+        # Comparaison sans objet si un prix est invalide (déjà signalé).
+        if not invalid and not ohlc_consistent(open_=open_, high=high, low=low, close=close):
+            report(
+                day,
+                "ohlc_inconsistent",
+                f"{where} : low {low} / high {high} incompatibles avec open {open_} "
+                f"et close {close}",
+            )
+        bars.append(parsed)
+
+    return RowCheck(bars=[] if violations else bars, violations=violations)
+
+
+# --- Avertissements (F02 R3) : sur des barres déjà conformes à R2 -------------------------------
+
+
+def large_moves(symbol: str, bars: Sequence[Bar], *, since: date) -> list[ValidateWarning]:
+    """Sauts de cours des barres datées `>= since` : `|ln(close_t / close_{t-1})| > ln(1,4)`.
+
+    `t-1` est la barre précédente du fichier (elle peut précéder `since`) ; `value` est la
+    variation simple, arrondie à 4 décimales.
+    """
+    warnings: list[ValidateWarning] = []
+    for previous, current in itertools.pairwise(bars):
+        day, close, previous_close = current[0], current[4], previous[4]
+        if day < since or abs(math.log(close / previous_close)) <= LARGE_MOVE_LOG:
+            continue
+        change = round(close / previous_close - 1, VALUE_DECIMALS)
+        warnings.append(
+            ValidateWarning(symbol=symbol, rule="large_move", start=day, end=day, value=change)
+        )
+    return warnings
+
+
+def zero_volumes(symbol: str, bars: Sequence[Bar], *, since: date) -> list[ValidateWarning]:
+    """Barres de volume nul datées `>= since`, une par avertissement."""
+    return [
+        ValidateWarning(symbol=symbol, rule="zero_volume", start=bar[0], end=bar[0])
+        for bar in bars
+        if bar[0] >= since and bar[6] == 0
+    ]
+
+
+def missing_sessions(
+    symbol: str, bars: Sequence[Bar], sessions: Sequence[date]
+) -> list[ValidateWarning]:
+    """Séances de `sessions` absentes de `bars`, regroupées en plages consécutives.
+
+    `sessions` : séances NYSE examinées, triées, comprises entre la première et la dernière date
+    du fichier (et, par défaut, dans la fenêtre récente). Jours fériés, fermetures
+    exceptionnelles et demi-séances sont gérés par le calendrier qui fournit `sessions`.
+    `value` : nombre de séances manquantes de la plage.
+    """
+    present = {bar[0] for bar in bars}
+    warnings: list[ValidateWarning] = []
+    run: list[date] = []
+
+    def flush() -> None:
+        if run:
+            warnings.append(
+                ValidateWarning(
+                    symbol=symbol,
+                    rule="missing_session",
+                    start=run[0],
+                    end=run[-1],
+                    value=float(len(run)),
+                )
+            )
+            run.clear()
+
+    for session in sessions:
+        if session in present:
+            flush()
+        else:
+            run.append(session)
+    flush()
+    return warnings
+
+
+def stale(
+    symbol: str, last_date: date, *, threshold: date, sessions_late: int
+) -> ValidateWarning | None:
+    """Avertissement `stale` si `last_date < threshold` (= S - 3 séances), sinon None.
+
+    `sessions_late` : nombre de séances entre `last_date` (exclue) et S (incluse), journalisé
+    dans `value`.
+    """
+    if last_date >= threshold:
+        return None
+    return ValidateWarning(
+        symbol=symbol, rule="stale", start=None, end=None, value=float(sessions_late)
+    )

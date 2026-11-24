@@ -14,11 +14,12 @@ import tempfile
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Final, Literal
 
 from pydantic import JsonValue, ValidationError
 
 from tradinghelper.config import find_repo_root
-from tradinghelper.schemas import PRICE_COLUMNS, Bar, IngestRun, PricesFile, RunReport
+from tradinghelper.schemas import PRICE_COLUMNS, Bar, IngestRun, PricesFile, RunReport, ValidateRun
 
 ENCODING = "utf-8"
 
@@ -36,9 +37,14 @@ def data_dir() -> Path:
     return find_repo_root() / "data"
 
 
+def prices_dir(root: Path) -> Path:
+    """`{root}/raw/prices` : dossier des fichiers de prix bruts."""
+    return root / "raw" / "prices"
+
+
 def prices_path(root: Path, symbol: str) -> Path:
     """`{root}/raw/prices/{SYMBOL}.json` — nom de fichier = symbole de config (F01 R12)."""
-    return root / "raw" / "prices" / f"{symbol}.json"
+    return prices_dir(root) / f"{symbol}.json"
 
 
 def run_report_path(root: Path, session: date) -> Path:
@@ -116,19 +122,46 @@ class PricesFileError(Exception):
         super().__init__(f"{path.as_posix()}: {reason}")
 
 
+def price_files(prices_dir: Path) -> dict[str, Path]:
+    """Fichiers de prix de `prices_dir`, par symbole (nom sans `.json`), triés (F02 R1).
+
+    Seuls les fichiers `*.json` non cachés comptent : les temporaires d'écriture atomique
+    (`.X.json.….tmp`) et tout autre fichier sont ignorés. Dossier absent : `{}`.
+    """
+    if not prices_dir.is_dir():
+        return {}
+    files = {
+        path.name.removesuffix(".json"): path
+        for path in prices_dir.iterdir()
+        if path.suffix == ".json" and not path.name.startswith(".") and path.is_file()
+    }
+    return dict(sorted(files.items()))
+
+
+def read_json(path: Path) -> JsonValue:
+    """Contenu JSON (UTF-8) de `path`, sans validation de contrat. `FileNotFoundError` si le
+    fichier n'existe pas ; `PricesFileError` s'il est illisible ou n'est pas du JSON valide.
+    Les littéraux `NaN` / `Infinity` sont acceptés : les règles de contenu les refusent."""
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        raise
+    except OSError as exc:
+        raise PricesFileError(path, f"fichier illisible ({exc.strerror})") from exc
+    try:
+        value: JsonValue = json.loads(raw.decode(ENCODING))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PricesFileError(path, f"JSON invalide ({exc})") from exc
+    return value
+
+
 def read_prices(path: Path) -> PricesFile | None:
     """Lit et valide un fichier de prix. `None` s'il n'existe pas ; `PricesFileError` s'il est
     illisible, n'est pas du JSON UTF-8 valide ou viole le contrat."""
     try:
-        raw = path.read_bytes()
+        data = read_json(path)
     except FileNotFoundError:
         return None
-    except OSError as exc:
-        raise PricesFileError(path, f"fichier illisible ({exc.strerror})") from exc
-    try:
-        data = json.loads(raw.decode(ENCODING))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise PricesFileError(path, f"JSON invalide ({exc})") from exc
     try:
         return PricesFile.model_validate(data)
     except ValidationError as exc:
@@ -175,13 +208,33 @@ class RunReportError(Exception):
         super().__init__(f"{path.as_posix()}: {reason}")
 
 
-def update_run_report(path: Path, session: date, run: IngestRun) -> None:
-    """Ajoute `run` à la section `ingest` du rapport de la séance `session` (F01 R15).
+type ReportSection = Literal["ingest", "validate"]
 
-    Le fichier est créé s'il n'existe pas. Les autres sections (ex. `validate`, F02) sont
-    conservées telles quelles. Un rapport existant illisible, non conforme ou d'une autre
-    séance n'est jamais écrasé (P7) : `RunReportError`. Écriture atomique.
+# Type d'entrée attendu par section : une entrée n'est jamais rangée dans la mauvaise section.
+_SECTION_ENTRY: Final[dict[str, type[IngestRun | ValidateRun]]] = {
+    "ingest": IngestRun,
+    "validate": ValidateRun,
+}
+
+
+def update_run_report(path: Path, session: date, run: IngestRun) -> None:
+    """Ajoute `run` à la section `ingest` du rapport de la séance `session` (F01 R15)."""
+    append_run_report_entry(path, session, "ingest", run)
+
+
+def append_run_report_entry(
+    path: Path, session: date, section: ReportSection, entry: IngestRun | ValidateRun
+) -> None:
+    """Ajoute `entry` à la liste `section` du rapport de la séance `session` (F01 R15, F02 R7).
+
+    Le fichier est créé s'il n'existe pas, avec la seule section concernée. Les autres sections
+    sont conservées telles quelles ; une section absente du fichier n'y est pas ajoutée vide.
+    Un rapport existant illisible, non conforme ou d'une autre séance n'est jamais écrasé (P7) :
+    `RunReportError`. Écriture atomique.
     """
+    expected = _SECTION_ENTRY[section]
+    if not isinstance(entry, expected):
+        raise TypeError(f"section `{section}` : {expected.__name__} attendu")
     try:
         raw = path.read_bytes()
     except FileNotFoundError:
@@ -193,7 +246,6 @@ def update_run_report(path: Path, session: date, run: IngestRun) -> None:
         current: dict[str, JsonValue] = {
             "schema_version": 1,
             "session_date": session.isoformat(),
-            "ingest": [],
         }
     else:
         try:
@@ -206,12 +258,13 @@ def update_run_report(path: Path, session: date, run: IngestRun) -> None:
                 f"séance {existing.session_date.isoformat()} dans le fichier, "
                 f"{session.isoformat()} attendue",
             )
-        current = existing.model_dump(mode="json")
+        # Clé JSON `validate` (alias) ; une section absente du fichier n'y est pas ajoutée.
+        current = existing.model_dump(mode="json", by_alias=True, exclude_unset=True)
 
-    ingest = current.get("ingest")
-    runs = list(ingest) if isinstance(ingest, list) else []
-    runs.append(run.model_dump(mode="json"))
-    current["ingest"] = runs
+    previous = current.get(section)
+    entries = list(previous) if isinstance(previous, list) else []
+    entries.append(entry.model_dump(mode="json"))
+    current[section] = entries
     # Validation du résultat avant écriture : on n'écrit jamais un rapport hors contrat.
     RunReport.model_validate(current)
     atomic_write_json(path, current)

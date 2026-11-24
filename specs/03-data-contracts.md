@@ -2,7 +2,8 @@
 
 Source de vérité : modèles pydantic dans `src/tradinghelper/schemas.py`.
 `th schemas` génère les JSON Schemas dans `schemas/` ; le dashboard en génère ses types TS
-(`json-schema-to-typescript`). Toute modification de contrat incrémente `schema_version`.
+(`json-schema-to-typescript`). Toute modification de contrat incrémente `schema_version`, sauf l'ajout d'une section
+ou d'un champ optionnel qui laisse valides les fichiers existants (ex. section `validate` du rapport de run, F02 R8).
 
 ## 1. Univers — `config/universe.yaml`
 ```yaml
@@ -131,7 +132,40 @@ Modèle pydantic `RunReport` dans `schemas.py`. Section `ingest` (F01 R15) = lis
 }
 ```
 `status ∈ {ok, unchanged, failed}` ; `mode ∈ {initial, incremental, full}` ; `rewrite_reason ∈ {revision, backfill, null}`.
-Les sections des autres étapes (`validate` pour F02, etc.) sont définies par leurs features.
+Section `validate` (F02 R7–R8) = liste d'exécutions de `th validate`, ajoutée si le rapport de la séance existe déjà
+ou s'il y a une violation bloquante :
+```json
+{
+  "schema_version": 1,
+  "session_date": "2026-11-23",
+  "validate": [
+    {
+      "started_at": "2026-11-23T22:32:15Z",
+      "finished_at": "2026-11-23T22:32:16Z",
+      "duration_s": 0.9,
+      "args": { "symbols": null, "all_history": false },
+      "exit_code": 1,
+      "files_checked": 21,
+      "violations": [
+        { "symbol": "AAPL", "date": "2026-11-20", "rule": "ohlc_inconsistent",
+          "detail": "2026-11-20 : low 229.6 / high 229.0 incompatibles avec open 231.0 et close 232.4" }
+      ],
+      "warnings": [
+        { "symbol": "MSFT", "rule": "missing_session", "start": "2026-11-17", "end": "2026-11-18", "value": 2 },
+        { "symbol": "NVDA", "rule": "large_move", "start": "2026-11-23", "end": "2026-11-23", "value": 0.6 },
+        { "symbol": "TSLA", "rule": "stale", "start": null, "end": null, "value": 5 }
+      ]
+    }
+  ]
+}
+```
+Violations (`exit_code: 1` si et seulement s'il y en a) : `unreadable`, `schema`, `symbol_mismatch`, `empty_bars`,
+`dates_not_increasing`, `non_session_date`, `after_last_session`, `non_positive_price`, `negative_volume`,
+`ohlc_inconsistent`, `not_rounded` ; `symbol` = nom du fichier, `date` à `null` pour une erreur de fichier ou d'en-tête.
+Avertissements : `missing_session` (plage, `value` = nombre de séances), `large_move` (`value` = variation simple),
+`zero_volume`, `stale` (`value` = séances de retard), `missing_file` ; `start`/`end` à `null` pour `stale` et `missing_file`.
+
+Les sections des étapes suivantes (`signal`, etc.) sont définies par leurs features.
 
 ## 7. Export dashboard — `dashboard/public/data/` (non commité)
 | Fichier | Contenu | Taille cible |

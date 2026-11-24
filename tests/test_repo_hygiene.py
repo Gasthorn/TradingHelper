@@ -140,6 +140,38 @@ def test_provider_imports_confined(package: str, allowed: str) -> None:
     assert offenders == []
 
 
+@pytest.mark.parametrize(
+    "package",
+    [
+        "os",
+        "pathlib",
+        "io",
+        "shutil",
+        "tempfile",
+        "tradinghelper.data.storage",
+        "tradinghelper.data.calendar",
+    ],
+)
+def test_quality_module_is_pure(package: str) -> None:
+    """F02 (plan) : `data/quality.py` ne fait aucune E/S ; le calendrier y entre en fonction."""
+    data_pkg = REPO_ROOT / "src" / "tradinghelper" / "data"
+    offenders = [loc for loc in _imports_of(data_pkg, package) if loc.startswith("quality.py:")]
+
+    assert offenders == []
+
+
+def test_quality_module_never_opens_files() -> None:
+    path = REPO_ROOT / "src" / "tradinghelper" / "data" / "quality.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    calls = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"
+    ]
+
+    assert calls == []
+
+
 def test_imports_of_detects_violation(tmp_path: Path) -> None:
     """Garde-fou du détecteur : un import interdit est bien trouvé (absolu, `from`, sous-module)."""
     (tmp_path / "a.py").write_text("import pandas as pd\n", encoding="utf-8")
@@ -209,6 +241,27 @@ def test_docs_list_new_data_modules() -> None:
     assert "TH_DATA_DIR" in claude_md
     assert "source.py" in architecture
     assert "bars.py" in architecture
+
+
+def test_readme_documents_validate() -> None:
+    """F02 (T14) : commande `th validate`, options, codes de sortie, rapport conditionnel."""
+    readme = _readme()
+
+    assert "### `th validate`" in readme
+    for expected in ("uv run th validate", "--all-history", "--symbols", "aucun rapport"):
+        assert expected in readme, expected
+    assert "arrivent avec les features F02" not in readme
+
+
+def test_docs_list_validate_modules() -> None:
+    """F02 (plan, décision 1) : `quality.py` pur, `validate.py` à effets de bord, documentés."""
+    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    architecture = (REPO_ROOT / "specs" / "02-architecture.md").read_text(encoding="utf-8")
+
+    assert "data/validate.py" in claude_md
+    assert "data/quality.py" in claude_md
+    assert "uv run th validate" in claude_md
+    assert "quality.py" in architecture
 
 
 def test_readme_mentions_dashboard_url_and_github_settings() -> None:

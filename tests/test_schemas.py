@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,9 @@ from tradinghelper.schemas import (
     IngestWarning,
     PricesFile,
     RunReport,
+    ValidateRun,
+    ValidateViolation,
+    ValidateWarning,
     render_json_schemas,
     write_json_schemas,
 )
@@ -152,18 +157,28 @@ def test_prices_model_is_immutable() -> None:
 # --- Exemples du contrat (le document et les modèles ne doivent pas diverger) -------------------
 
 
-def _contract_example(section: str) -> Any:
-    """Premier bloc ```json de la section `## {section}.` de `03-data-contracts.md`."""
+def _contract_example(section: str, index: int = 0) -> Any:
+    """Bloc ```json n° `index` de la section `## {section}.` de `03-data-contracts.md`."""
     text = CONTRACTS.read_text(encoding="utf-8")
     start = text.index(f"\n## {section}.")
     end = text.find("\n## ", start + 1)
-    block = re.search(r"```json\n(.*?)\n```", text[start : end if end != -1 else None], re.S)
-    assert block is not None, f"pas de bloc JSON dans la section {section}"
-    return json.loads(block.group(1))
+    blocks = re.findall(r"```json\n(.*?)\n```", text[start : end if end != -1 else None], re.S)
+    assert len(blocks) > index, f"pas de bloc JSON n°{index} dans la section {section}"
+    return json.loads(blocks[index])
 
 
 def test_contract_example_prices_is_valid() -> None:
     PricesFile.model_validate(_contract_example("2"))
+
+
+def test_contract_validate_example_is_valid() -> None:
+    """F02 R8 : l'exemple de section `validate` du contrat §6 est accepté par `RunReport`."""
+    report = RunReport.model_validate(_contract_example("6", index=1))
+
+    (run,) = report.validate_
+    assert run.exit_code == 1
+    assert {v.rule for v in run.violations} == {"ohlc_inconsistent"}
+    assert {w.rule for w in run.warnings} == {"missing_session", "large_move", "stale"}
 
 
 def test_contract_example_run_report_is_valid() -> None:
@@ -228,10 +243,10 @@ def test_run_report_without_ingest_section() -> None:
 
 
 def test_run_report_preserves_unknown_sections() -> None:
-    validate_section = {"errors": [], "warnings": [{"symbol": "AAPL", "rule": "stale"}]}
-    report = RunReport.model_validate(_report(validate=validate_section))
+    signal_section = {"errors": [], "warnings": [{"symbol": "AAPL", "rule": "stale"}]}
+    report = RunReport.model_validate(_report(signal=signal_section))
 
-    assert report.model_dump(mode="json")["validate"] == validate_section
+    assert report.model_dump(mode="json")["signal"] == signal_section
 
 
 @pytest.mark.parametrize(
@@ -298,6 +313,176 @@ INVALID_RUNS: dict[str, dict[str, Any]] = {
 def test_ingest_run_rejects_invalid(data: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         RunReport.model_validate(data)
+
+
+# --- Section `validate` du rapport de run (F02 — R8) -------------------------------------------
+
+
+def _validate_run(**changes: Any) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "started_at": "2026-11-23T22:33:00Z",
+        "finished_at": "2026-11-23T22:33:01Z",
+        "duration_s": 1.2,
+        "args": {"symbols": None, "all_history": False},
+        "exit_code": 1,
+        "files_checked": 3,
+        "violations": [
+            {
+                "symbol": "AAPL",
+                "date": "2026-11-20",
+                "rule": "ohlc_inconsistent",
+                "detail": "high 227.0 < max(open, close) 230.95",
+            },
+            {"symbol": "readme", "date": None, "rule": "unreadable", "detail": "JSON invalide"},
+        ],
+        "warnings": [
+            {
+                "symbol": "MSFT",
+                "rule": "missing_session",
+                "start": "2026-11-17",
+                "end": "2026-11-18",
+                "value": 2,
+            },
+            {
+                "symbol": "NVDA",
+                "rule": "large_move",
+                "start": "2026-11-23",
+                "end": "2026-11-23",
+                "value": 0.6,
+            },
+            {"symbol": "SPY", "rule": "zero_volume", "start": "2026-11-23", "end": "2026-11-23"},
+            {"symbol": "TSLA", "rule": "stale", "start": None, "end": None, "value": 5},
+            {"symbol": "META", "rule": "missing_file", "start": None, "end": None},
+        ],
+    }
+    data.update(changes)
+    return data
+
+
+def _warning(**changes: Any) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "symbol": "AAPL",
+        "rule": "large_move",
+        "start": "2026-11-23",
+        "end": "2026-11-23",
+        "value": 0.6,
+    }
+    data.update(changes)
+    return data
+
+
+def test_validate_run_accepts_valid_entry() -> None:
+    run = ValidateRun.model_validate(_validate_run())
+
+    assert run.exit_code == 1
+    assert [v.rule for v in run.violations] == ["ohlc_inconsistent", "unreadable"]
+    assert run.violations[1].symbol == "readme"  # nom de fichier quelconque (orphelin)
+    assert run.warnings[3].start is None
+    assert ValidateRun.model_validate(run.model_dump(mode="json")) == run
+
+
+def test_validate_run_without_violation_exits_0() -> None:
+    run = ValidateRun.model_validate(_validate_run(exit_code=0, violations=[]))
+
+    assert run.exit_code == 0
+
+
+INVALID_VALIDATE_RUNS: dict[str, dict[str, Any]] = {
+    "code 1 sans violation": _validate_run(violations=[]),
+    "code 0 avec violation": _validate_run(exit_code=0),
+    "code de sortie 2": _validate_run(exit_code=2),
+    "fin avant début": _validate_run(finished_at="2026-11-23T22:32:00Z"),
+    "horodatage hors UTC": _validate_run(started_at="2026-11-23T23:33:00+01:00"),
+    "fichiers vérifiés négatif": _validate_run(files_checked=-1),
+    "règle bloquante inconnue": _validate_run(
+        violations=[{"symbol": "AAPL", "date": None, "rule": "bad_rule", "detail": "x"}]
+    ),
+    "règle d'avertissement inconnue": _validate_run(warnings=[_warning(rule="bad_rule")]),
+    "début après fin": _validate_run(warnings=[_warning(start="2026-11-24")]),
+    "large_move sans dates": _validate_run(warnings=[_warning(start=None, end=None)]),
+    "large_move sans fin": _validate_run(warnings=[_warning(end=None)]),
+    "stale avec dates": _validate_run(warnings=[_warning(rule="stale")]),
+    "missing_file avec dates": _validate_run(warnings=[_warning(rule="missing_file")]),
+    "symbole d'avertissement invalide": _validate_run(warnings=[_warning(symbol="aapl")]),
+    "clé inconnue": _validate_run(extra=1),
+    "argument inconnu": _validate_run(args={"symbols": None, "all_history": False, "full": True}),
+}
+
+
+@pytest.mark.parametrize(
+    "data", list(INVALID_VALIDATE_RUNS.values()), ids=list(INVALID_VALIDATE_RUNS)
+)
+def test_validate_run_rules(data: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        ValidateRun.model_validate(data)
+
+
+def test_validate_violation_symbol_is_free_text() -> None:
+    violation = ValidateViolation.model_validate(
+        {"symbol": "readme", "date": None, "rule": "schema", "detail": "bars: champ requis"}
+    )
+
+    assert violation.symbol == "readme"
+
+
+def test_validate_warning_value_is_optional() -> None:
+    warning = ValidateWarning.model_validate(
+        {"symbol": "SPY", "rule": "zero_volume", "start": "2026-11-23", "end": "2026-11-23"}
+    )
+
+    assert warning.value is None
+
+
+def test_run_report_validate_alias_roundtrip() -> None:
+    report = RunReport.model_validate(_report(validate=[_validate_run()]))
+
+    assert report.validate_[0].files_checked == 3
+    dumped = report.model_dump(mode="json", by_alias=True)
+    assert "validate_" not in dumped
+    assert dumped["validate"][0]["exit_code"] == 1
+    assert RunReport.model_validate(dumped) == report
+    assert "validate_" not in report.model_dump_json(by_alias=True)
+
+
+def test_run_report_validate_section_is_typed() -> None:
+    with pytest.raises(ValidationError):
+        RunReport.model_validate(_report(validate=[_validate_run(exit_code=2)]))
+
+
+def test_existing_ingest_only_report_still_valid() -> None:
+    report = RunReport.model_validate(_report())
+
+    assert report.validate_ == []
+
+
+def test_run_report_dump_exclude_unset_omits_validate() -> None:
+    dumped = RunReport.model_validate(_report()).model_dump(
+        mode="json", by_alias=True, exclude_unset=True
+    )
+
+    assert "validate" not in dumped
+    assert dumped == _report()
+
+
+def test_run_report_defines_validate_without_shadow_warning() -> None:
+    """Le champ Python `validate_` (alias JSON `validate`) ne masque pas `BaseModel.validate`."""
+    # Sous-processus : recharger le module ici changerait l'identité des classes des autres tests.
+    result = subprocess.run(
+        [sys.executable, "-W", "error", "-c", "import tradinghelper.schemas"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_run_report_schema_has_optional_validate_section() -> None:
+    schema = json.loads(render_json_schemas()["run_report.schema.json"])
+
+    assert "validate" in schema["properties"]
+    assert "validate_" not in schema["properties"]
+    assert "validate" not in schema.get("required", [])
 
 
 def test_run_report_requires_schema_version_and_session_date() -> None:

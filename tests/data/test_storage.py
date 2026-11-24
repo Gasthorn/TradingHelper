@@ -13,6 +13,7 @@ from tradinghelper.data import storage
 from tradinghelper.data.storage import (
     PricesFileError,
     RunReportError,
+    append_run_report_entry,
     atomic_write_json,
     atomic_write_text,
     data_dir,
@@ -31,6 +32,8 @@ from tradinghelper.schemas import (
     IngestTickerResult,
     PricesFile,
     RunReport,
+    ValidateRun,
+    ValidateViolation,
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "prices"
@@ -368,19 +371,52 @@ def test_update_report_appends_ingest_run(tmp_path: Path) -> None:
 
 def test_update_report_preserves_other_sections(tmp_path: Path) -> None:
     target = tmp_path / "2026-11-23.json"
-    validate_section = {"errors": [], "warnings": [{"symbol": "AAPL", "rule": "stale"}]}
+    signal_section = {"errors": [], "warnings": [{"symbol": "AAPL", "rule": "stale"}]}
     target.write_text(
-        json.dumps(
-            {"schema_version": 1, "session_date": "2026-11-23", "validate": validate_section}
-        ),
+        json.dumps({"schema_version": 1, "session_date": "2026-11-23", "signal": signal_section}),
         encoding="utf-8",
     )
 
     update_run_report(target, SESSION, _run())
 
     data = json.loads(target.read_text(encoding="utf-8"))
-    assert data["validate"] == validate_section
+    assert data["signal"] == signal_section
     assert len(data["ingest"]) == 1
+
+
+def test_update_report_preserves_typed_validate_section(tmp_path: Path) -> None:
+    """La section `validate` (F02) est réécrite sous sa clé JSON, jamais sous `validate_`."""
+    target = tmp_path / "2026-11-23.json"
+    validate_run = {
+        "started_at": "2026-11-23T22:33:00Z",
+        "finished_at": "2026-11-23T22:33:01Z",
+        "duration_s": 1.0,
+        "args": {"symbols": None, "all_history": False},
+        "exit_code": 0,
+        "files_checked": 2,
+        "violations": [],
+        "warnings": [],
+    }
+    target.write_text(
+        json.dumps({"schema_version": 1, "session_date": "2026-11-23", "validate": [validate_run]}),
+        encoding="utf-8",
+    )
+
+    update_run_report(target, SESSION, _run())
+
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert "validate_" not in data
+    assert data["validate"] == [validate_run]
+    assert len(data["ingest"]) == 1
+
+
+def test_update_report_does_not_add_empty_validate_section(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    update_run_report(target, SESSION, _run(31))
+
+    update_run_report(target, SESSION, _run(45))
+
+    assert "validate" not in json.loads(target.read_text(encoding="utf-8"))
 
 
 def test_update_report_is_atomic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -425,3 +461,174 @@ def test_update_report_refuses_corrupted_report(tmp_path: Path, content: bytes) 
 
     assert target.as_posix() in str(excinfo.value)
     assert target.read_bytes() == content
+
+
+# --- Ajout générique d'une entrée au rapport (F02 — R7) -----------------------------------------
+
+
+def _validate_run(exit_code: int = 0) -> ValidateRun:
+    violations = (
+        [ValidateViolation(symbol="AAPL", date=SESSION, rule="ohlc_inconsistent", detail="x")]
+        if exit_code
+        else []
+    )
+    return ValidateRun.model_validate(
+        {
+            "started_at": "2026-11-23T22:33:00Z",
+            "finished_at": "2026-11-23T22:33:01Z",
+            "duration_s": 1.0,
+            "args": {"symbols": None, "all_history": False},
+            "exit_code": exit_code,
+            "files_checked": 2,
+            "violations": [v.model_dump(mode="json") for v in violations],
+            "warnings": [],
+        }
+    )
+
+
+def test_append_entry_creates_report_with_validate_only(tmp_path: Path) -> None:
+    target = tmp_path / "runs" / "2026-11-23.json"
+
+    append_run_report_entry(target, SESSION, "validate", _validate_run(1))
+
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert list(data) == ["schema_version", "session_date", "validate"]
+    assert data["validate"][0]["exit_code"] == 1
+    assert _load_report(target).validate_ == [_validate_run(1)]
+
+
+def test_append_validate_keeps_ingest_section(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    update_run_report(target, SESSION, _run())
+    ingest_before = json.loads(target.read_text(encoding="utf-8"))["ingest"]
+
+    append_run_report_entry(target, SESSION, "validate", _validate_run())
+    append_run_report_entry(target, SESSION, "validate", _validate_run(1))
+
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert list(data) == ["schema_version", "session_date", "ingest", "validate"]
+    assert data["ingest"] == ingest_before
+    assert [run["exit_code"] for run in data["validate"]] == [0, 1]
+
+
+def test_append_ingest_keeps_validate_section(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    append_run_report_entry(target, SESSION, "validate", _validate_run())
+    validate_before = json.loads(target.read_text(encoding="utf-8"))["validate"]
+
+    append_run_report_entry(target, SESSION, "ingest", _run())
+
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert data["validate"] == validate_before
+    assert len(data["ingest"]) == 1
+    assert "validate_" not in data
+
+
+def test_ingest_only_report_bytes_unchanged_after_ingest_append(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    update_run_report(target, SESSION, _run(31, "AAPL"))
+    before = json.loads(target.read_text(encoding="utf-8"))
+
+    append_run_report_entry(target, SESSION, "ingest", _run(45, "MSFT"))
+
+    after = json.loads(target.read_text(encoding="utf-8"))
+    expected = {**before, "ingest": [*before["ingest"], _run(45, "MSFT").model_dump(mode="json")]}
+    assert after == expected
+    assert target.read_text(encoding="utf-8") == json.dumps(expected, indent=2) + "\n"
+
+
+def test_append_entry_refuses_other_session(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    append_run_report_entry(target, SESSION, "validate", _validate_run())
+    before = target.read_bytes()
+
+    with pytest.raises(RunReportError, match="2026-11-24"):
+        append_run_report_entry(target, date(2026, 11, 24), "validate", _validate_run())
+
+    assert target.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"{tronqu", b'{"schema_version": 1, "session_date": "2026-11-23", "validate": [{}]}'],
+    ids=["JSON invalide", "section validate non conforme"],
+)
+def test_append_entry_refuses_unreadable_report(tmp_path: Path, content: bytes) -> None:
+    target = tmp_path / "2026-11-23.json"
+    target.write_bytes(content)
+
+    with pytest.raises(RunReportError):
+        append_run_report_entry(target, SESSION, "validate", _validate_run())
+
+    assert target.read_bytes() == content
+
+
+def test_append_entry_rejects_mismatched_section(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+
+    with pytest.raises(TypeError):
+        append_run_report_entry(target, SESSION, "ingest", _validate_run())
+
+    assert not target.exists()
+
+
+# --- Liste des fichiers de prix et lecture JSON brute (F02 — R1, R5) ----------------------------
+
+
+def test_price_files_lists_json_sorted(tmp_path: Path) -> None:
+    for name in ("SPY.json", "AAPL.json", "BRK.B.json"):
+        (tmp_path / name).write_text("{}", encoding="utf-8")
+
+    files = storage.price_files(tmp_path)
+
+    assert list(files) == ["AAPL", "BRK.B", "SPY"]
+    assert files["BRK.B"] == tmp_path / "BRK.B.json"
+
+
+def test_price_files_ignores_tmp_hidden_and_non_json(tmp_path: Path) -> None:
+    (tmp_path / "AAPL.json").write_text("{}", encoding="utf-8")
+    for name in (".AAPL.json.abc123.tmp", ".hidden.json", "notes.txt", "AAPL.json.bak"):
+        (tmp_path / name).write_text("x", encoding="utf-8")
+    (tmp_path / "sub.json").mkdir()
+
+    assert list(storage.price_files(tmp_path)) == ["AAPL"]
+
+
+def test_price_files_missing_dir_is_empty(tmp_path: Path) -> None:
+    assert storage.price_files(tmp_path / "absent") == {}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"{tronqu", b'{"a": "\xff"}', b""],
+    ids=["JSON invalide", "UTF-8 invalide", "vide"],
+)
+def test_read_json_invalid_raises(tmp_path: Path, content: bytes) -> None:
+    target = tmp_path / "AAPL.json"
+    target.write_bytes(content)
+
+    with pytest.raises(PricesFileError) as excinfo:
+        storage.read_json(target)
+
+    assert excinfo.value.path == target
+
+
+def test_read_json_returns_value(tmp_path: Path) -> None:
+    target = tmp_path / "AAPL.json"
+    target.write_text('{"symbol": "AAPL", "bars": [["2026-11-23", 1.5, 2]]}', encoding="utf-8")
+
+    assert storage.read_json(target) == {"symbol": "AAPL", "bars": [["2026-11-23", 1.5, 2]]}
+
+
+def test_read_json_keeps_nan_literal(tmp_path: Path) -> None:
+    """`NaN` est lu tel quel : c'est la règle `non_positive_price` qui le refuse (F02 R2)."""
+    target = tmp_path / "AAPL.json"
+    target.write_text('{"bars": [[NaN]]}', encoding="utf-8")
+
+    value = storage.read_json(target)
+
+    assert isinstance(value, dict)
+    bars = value["bars"]
+    assert isinstance(bars, list)
+    assert isinstance(bars[0], list)
+    assert bars[0][0] != bars[0][0]  # NaN
