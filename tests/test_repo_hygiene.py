@@ -140,6 +140,38 @@ def test_provider_imports_confined(package: str, allowed: str) -> None:
     assert offenders == []
 
 
+@pytest.mark.parametrize(
+    "package",
+    [
+        "os",
+        "pathlib",
+        "io",
+        "shutil",
+        "tempfile",
+        "tradinghelper.data.storage",
+        "tradinghelper.data.calendar",
+    ],
+)
+def test_quality_module_is_pure(package: str) -> None:
+    """F02 (plan) : `data/quality.py` ne fait aucune E/S ; le calendrier y entre en fonction."""
+    data_pkg = REPO_ROOT / "src" / "tradinghelper" / "data"
+    offenders = [loc for loc in _imports_of(data_pkg, package) if loc.startswith("quality.py:")]
+
+    assert offenders == []
+
+
+def test_quality_module_never_opens_files() -> None:
+    path = REPO_ROOT / "src" / "tradinghelper" / "data" / "quality.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    calls = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"
+    ]
+
+    assert calls == []
+
+
 def test_imports_of_detects_violation(tmp_path: Path) -> None:
     """Garde-fou du détecteur : un import interdit est bien trouvé (absolu, `from`, sous-module)."""
     (tmp_path / "a.py").write_text("import pandas as pd\n", encoding="utf-8")

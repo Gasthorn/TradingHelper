@@ -43,7 +43,7 @@
 
 ## Règles pures (`data/quality.py`)
 
-- [ ] **T5** `check_rows` : forme, fichier vide et dates — R2
+- [x] **T5** `check_rows` : forme, fichier vide et dates — R2
   - Tests : `tests/data/test_quality.py::test_blocking_rule[...]` (première moitié), paramétré sur :
     - `empty_bars` ;
     - ligne de mauvaise forme : 6 éléments, chaîne à la place d'un prix, booléen, date illisible → `schema` (avec la date si elle est lisible) ;
