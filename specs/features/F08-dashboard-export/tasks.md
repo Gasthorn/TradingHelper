@@ -30,7 +30,7 @@
   - Fini quand : tests verts ; `indicators.py` n'importe que `numpy` et la bibliothèque standard
     (`tests/test_repo_hygiene.py::test_indicators_module_is_pure`, ajouté : ni `pandas`, ni `os`, ni `pathlib`, ni `tradinghelper.data`) ; qualité verte.
 
-- [ ] **T3** `rsi_wilder` — R7, R8
+- [x] **T3** `rsi_wilder` — R7, R8
   - Tests : `test_indicators.py::test_rsi_reference_values` (valeurs RSI(14) ajoutées à la fixture de T2, calculées au
     tableur selon Wilder), `::test_rsi_warmup_is_14_nan`, `::test_rsi_flat_series_is_50`, `::test_rsi_strictly_increasing_is_100`,
     `::test_rsi_strictly_decreasing_is_0`, `::test_rsi_bounds` (toutes les valeurs dans [0, 100]).

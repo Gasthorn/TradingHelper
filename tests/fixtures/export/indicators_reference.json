@@ -1,5 +1,5 @@
 {
-  "method": "Calcul indépendant de numpy : fractions exactes (moyenne, variance de population ddof=0), racine carrée Decimal à 40 chiffres, arrondi à 8 décimales. Script hors dépôt (F08 T2).",
+  "method": "Calcul indépendant de numpy : fractions exactes (moyenne, variance de population ddof=0), racine carrée Decimal à 40 chiffres, RSI de Wilder en fractions exactes ; arrondi à 8 décimales. Script hors dépôt (F08 T2, T3).",
   "close": [
     100.0,
     101.25,
@@ -159,5 +159,37 @@
     103.70337121,
     104.24093093,
     104.58332647
+  ],
+  "rsi14": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    79.04761905,
+    76.18263121,
+    78.33511733,
+    80.06724746,
+    75.63869496,
+    72.58671925,
+    76.20552955,
+    78.13020806,
+    75.84327693,
+    77.78819018,
+    74.43227086,
+    77.97450571,
+    78.68133946,
+    72.65500698,
+    76.45777739,
+    77.53169434
   ]
 }
