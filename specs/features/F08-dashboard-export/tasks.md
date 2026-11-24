@@ -18,7 +18,7 @@
 
 ## Indicateurs (`features/indicators.py`, pur)
 
-- [ ] **T2** `sma` et `bollinger` — R7, R8
+- [x] **T2** `sma` et `bollinger` — R7, R8
   - Préalable : créer `tests/fixtures/export/indicators_reference.json` : une série de 30 clôtures et les valeurs attendues de
     SMA(5), SMA(20), Bollinger(20, 2) haut/bas avec écart-type de population, calculées **indépendamment** du code (tableur
     ou calcul à la main), avec la méthode notée dans le fichier.

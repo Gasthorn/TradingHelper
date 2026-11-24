@@ -195,6 +195,29 @@ def test_quality_module_never_opens_files() -> None:
     assert calls == []
 
 
+#: F08 (T2) : `features/indicators.py` est pur et ne dépend que de numpy (pas de pandas, ni E/S).
+INDICATORS_ALLOWED_IMPORTS = frozenset({"__future__", "typing", "numpy"})
+
+
+def test_indicators_module_is_pure() -> None:
+    path = REPO_ROOT / "src" / "tradinghelper" / "features" / "indicators.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    roots: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            roots.add("." if node.level else (node.module or "").split(".")[0])
+    opens = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"
+    ]
+
+    assert roots <= INDICATORS_ALLOWED_IMPORTS, roots - INDICATORS_ALLOWED_IMPORTS
+    assert opens == []
+
+
 def test_imports_of_detects_violation(tmp_path: Path) -> None:
     """Garde-fou du détecteur : un import interdit est bien trouvé (absolu, `from`, sous-module)."""
     (tmp_path / "a.py").write_text("import pandas as pd\n", encoding="utf-8")
