@@ -27,7 +27,7 @@
 - Checkout (ref `main` à jour) → `th export` → `npm ci && npm run build` → `actions/upload-pages-artifact` → `actions/deploy-pages`.
 
 ### `ci.yml`
-- Créé par F00 (R15–R17 : déclencheurs, jobs, permissions, actions épinglées). F10 ajoute : vérification `schemas/` à jour (F02 R6), test e2e smoke du dashboard.
+- Créé par F00 (R15–R17 : déclencheurs, jobs, permissions, actions épinglées). F10 ajoute : test e2e smoke du dashboard. (La vérification de `schemas/` à jour est déjà assurée par `pytest`, F01 R17.)
 
 ## Exigences
 - **R1** Chaque workflow DOIT déclarer des `permissions` minimales explicites.
@@ -36,6 +36,7 @@
   (ex. `data: daily update 2026-11-23 (history rewrite: AAPL, MSFT)`) : c'est la journalisation explicite exigée par P5 (F01 R4).
 - **R3** Le push DOIT faire `git pull --rebase` avant, avec 3 tentatives.
 - **R4** QUAND une étape échoue, le workflow DOIT quand même téléverser `data/runs/{date}.json` comme artefact et échouer visiblement (notification GitHub standard).
+  En particulier, QUAND `th validate` sort en code 1 (F02 R6), les étapes suivantes, le commit et le déploiement NE DOIVENT PAS être exécutés.
 - **R5** Les actions tierces DOIVENT être épinglées par SHA de commit.
 - **R6** Le daily DOIT durer < 15 min en régime normal.
 - **R7** Le dépôt DOIT documenter dans le README les réglages manuels : Pages → Source « GitHub Actions » ; Actions → « Read and write permissions ».

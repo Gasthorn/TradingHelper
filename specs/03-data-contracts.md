@@ -2,7 +2,8 @@
 
 Source de vérité : modèles pydantic dans `src/tradinghelper/schemas.py`.
 `th schemas` génère les JSON Schemas dans `schemas/` ; le dashboard en génère ses types TS
-(`json-schema-to-typescript`). Toute modification de contrat incrémente `schema_version`.
+(`json-schema-to-typescript`). Toute modification de contrat incrémente `schema_version`, sauf l'ajout d'une section
+ou d'un champ optionnel qui laisse valides les fichiers existants (ex. section `validate` du rapport de run, F02 R8).
 
 ## 1. Univers — `config/universe.yaml`
 ```yaml
@@ -131,7 +132,7 @@ Modèle pydantic `RunReport` dans `schemas.py`. Section `ingest` (F01 R15) = lis
 }
 ```
 `status ∈ {ok, unchanged, failed}` ; `mode ∈ {initial, incremental, full}` ; `rewrite_reason ∈ {revision, backfill, null}`.
-Les sections des autres étapes (`validate` pour F02, etc.) sont définies par leurs features.
+Les sections des autres étapes sont définies par leurs features : `validate` (liste d'exécutions) par F02 R7–R8, etc.
 
 ## 7. Export dashboard — `dashboard/public/data/` (non commité)
 | Fichier | Contenu | Taille cible |

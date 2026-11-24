@@ -26,7 +26,7 @@ Pages Portfolios/Health complètes, e2e, Lighthouse, documentation.
 |---|---|---|---|---|
 | F00 | Bootstrap du dépôt | M0 | — | ✔️ Done |
 | F01 | Ingestion yFinance | M1 | F00 | ✔️ Done |
-| F02 | Qualité des données | M1 | F01 | 📝 Draft |
+| F02 | Qualité des données | M1 | F01 | ✅ Approved |
 | F08 | Export dashboard (partiel) | M1 | F01, F02 | 📝 Draft |
 | F09 | Dashboard (Overview, Ticker) | M1 | F08 | 📝 Draft |
 | F10 | Orchestration (daily, deploy, ci) | M1 | F01, F02, F08 | 📝 Draft |
