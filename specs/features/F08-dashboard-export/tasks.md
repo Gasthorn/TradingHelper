@@ -133,7 +133,7 @@
   - Fini quand : tests verts ; génération de 21 × 3 780 barres < 5 s ; qualité verte.
 
 - [x] **T15** Lecture des sources — R13, R3
-  - Préalable : fixtures `tests/fixtures/export/signals/` (BUY le 2026-11-20, HOLD le 2026-11-21, SELL le 2026-11-23
+  - Préalable : fixtures `tests/fixtures/export/signals/` (HOLD le 2026-11-19, BUY le 2026-11-20, SELL le 2026-11-23
     sur AAPL, plus `latest.json`) et `tests/fixtures/export/runs/` (rapports valides).
   - Tests : `tests/export/test_dashboard.py::test_read_sources_prices_only` (pas de `runs/` ni `signals/` → listes vides),
     `::test_orphan_price_file_not_read`, `::test_missing_universe_file_skipped`, `::test_latest_json_not_read_as_dated_signals`,
@@ -236,7 +236,7 @@
     - dashboard (`npm run dev`, export copié dans `public/data/`) : `manifest.json` chargé, les 23 fichiers
       listés servis avec empreinte et taille conformes, fiche AAPL lisible, aucune erreur console.
 
-- [ ] **T_final** Vérification : tous les critères d'acceptation M1 de la spec (→ `/spec-verify F08`)
+- [x] **T_final** Vérification : tous les critères d'acceptation M1 de la spec (→ `/spec-verify F08`) — 17/17 prouvés, statut Done (M1) le 2026-11-25.
 
 ## Couverture exigences → tâches
 | Exigence | Tâches |

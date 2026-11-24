@@ -61,7 +61,7 @@ modèles d'export refusent `NaN` et les infinis (`allow_inf_nan=False`), et la s
 | `dashboard/eslint.config.js` | modifier | Ignorer `src/types/` (code généré) ; il reste couvert par `npm run typecheck`. |
 | `.github/workflows/ci.yml` | modifier | Job `dashboard` : étape `npm run gen:types && git diff --exit-code -- src/types` (R5). |
 | `tests/synthetic.py` | créer | Générateur seedé de fichiers de prix valides (marche aléatoire géométrique, OHLC cohérents, arrondis à 4 décimales) pour N tickers × M séances NYSE (R19). |
-| `tests/fixtures/export/` | créer | Fixtures figées : `indicators_reference.json` (valeurs calculées au tableur), `signals/2026-11-20.json`, `2026-11-21.json`, `2026-11-23.json`, `latest.json`, rapports de run. |
+| `tests/fixtures/export/` | créer | Fixtures figées : `indicators_reference.json` (valeurs calculées sans numpy, en fractions exactes), `signals/2026-11-19.json`, `2026-11-20.json`, `2026-11-23.json`, `latest.json`, rapports de run. |
 | `tests/features/test_indicators.py` | créer | Valeurs de référence, cas limites, warm-up, propriété anti-look-ahead (R7, R8). |
 | `tests/export/test_build.py` | créer | Construction de chaque fichier, arrondis, marqueurs, santé, manifest, déterminisme (R6, R9–R12, R14, R15). |
 | `tests/export/test_dashboard.py` | créer | Scénarios sur dossiers temporaires : M1 prix seuls, sources invalides, remplacement du dossier, orphelins, lecture seule, taille et durée (R1–R3, R13, R19). |

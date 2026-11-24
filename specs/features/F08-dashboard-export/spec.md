@@ -1,6 +1,6 @@
 # F08 — Export des données pour le dashboard
 
-- **Statut** : 🔍 Verifying (M1, 17/17 critères prouvés) — M3 : ✅ Approved, plan à compléter
+- **Statut** : ✔️ Done (M1, 2026-11-25) — M3 : ✅ Approved, plan à compléter
 - **Milestone** : M1 (partiel : exigences et critères `[M1]`) puis M3 (complet : `[M3]`)
 - **Dépend de** : F01, F02 (M1) ; F04–F07 pour les sections `[M3]`
 - **Contrats** : `03-data-contracts.md` §7 (production) ; §1, §2, §6 (lecture) ; §3, §4, §5 (lecture, M3)
@@ -132,8 +132,8 @@ compacts, pré-calculés, validés par schéma et optimisés pour le navigateur,
   entièrement `null` ; aucun `NaN` dans la sortie. (R8, R14) — Preuve : `test_indicators.py::test_warmup_lengths[sma20|sma50|sma200|bb_upper|bb_lower|rsi14]`, `test_build.py::test_short_history_sma200_all_null`, `::test_no_nan_in_output`, `::test_render_refuses_nan`, `test_schemas.py::test_export_floats_reject_nan`.
 - [x] Test de propriété (hypothesis) : pour tout `t`, les indicateurs à `t` calculés sur la série tronquée à `t` sont égaux
   à ceux calculés sur la série complète. (R8) — Preuve : `test_indicators.py::test_no_lookahead` (6 indicateurs, séries de 2 à 400 valeurs) ; efficacité vérifiée par mutation (look-ahead injecté dans `sma` puis `rsi_wilder` → échec, T4) ; garde-fou `::test_lookahead_detector_catches_centered_window`.
-- [x] Avec une fixture `data/signals/` (BUY le 2026-11-20, HOLD le 2026-11-21, SELL le 2026-11-23 sur AAPL),
-  `tickers/AAPL.json` contient exactement les marqueurs BUY et SELL aux bonnes dates avec leur confiance. (R9) — Preuve : `test_dashboard.py::test_signals_fixture_markers_on_aapl` (BUY 20/11 à 0,67, SELL 23/11 à 0,38, HOLD exclu), `test_build.py::test_markers_buy_sell_only_sorted`. Le HOLD de la fixture est au 2026-11-19 : le 2026-11-21 est un samedi.
+- [x] Avec une fixture `data/signals/` (HOLD le 2026-11-19, BUY le 2026-11-20, SELL le 2026-11-23 sur AAPL),
+  `tickers/AAPL.json` contient exactement les marqueurs BUY et SELL aux bonnes dates avec leur confiance. (R9) — Preuve : `test_dashboard.py::test_signals_fixture_markers_on_aapl` (BUY 20/11 à 0,67, SELL 23/11 à 0,38, HOLD exclu), `test_build.py::test_markers_buy_sell_only_sorted`. Date du HOLD corrigée à la vérification (le 2026-11-21 initial est un samedi).
 - [x] `overview.json` contient `spark` de 60 valeurs (moins pour un historique court) et `change_1d` correct. (R10) — Preuve : `test_build.py::test_overview_spark_60_values`, `::test_overview_short_history_spark`, `::test_change_1d`, `::test_change_1d_null_single_bar`.
 - [x] Le `sha256` et les `bytes` de chaque fichier du manifest correspondent aux fichiers réels ; `git_sha` vaut
   `GITHUB_SHA` s'il est défini et `null` hors dépôt git ; `data_as_of` vaut la date du symbole le plus en retard. (R11) — Preuve : `test_dashboard.py::test_manifest_hashes_match_written_files`, `test_build.py::test_manifest_hashes_match_files`, `test_dashboard.py::test_git_sha_from_env`, `::test_git_sha_from_git_repo`, `::test_git_sha_null_outside_git`, `test_build.py::test_data_as_of_is_min_last_date` ; réel : empreintes vérifiées dans le navigateur (T24).
