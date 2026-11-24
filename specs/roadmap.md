@@ -27,7 +27,7 @@ Pages Portfolios/Health complètes, e2e, Lighthouse, documentation.
 | F00 | Bootstrap du dépôt | M0 | — | ✔️ Done |
 | F01 | Ingestion yFinance | M1 | F00 | ✔️ Done |
 | F02 | Qualité des données | M1 | F01 | ✔️ Done |
-| F08 | Export dashboard (partiel) | M1 | F01, F02 | 📝 Draft |
+| F08 | Export dashboard (partiel, crée `features/indicators.py`) | M1 | F01, F02 | 📝 Draft |
 | F09 | Dashboard (Overview, Ticker) | M1 | F08 | 📝 Draft |
 | F10 | Orchestration (daily, deploy, ci) | M1 | F01, F02, F08 | 📝 Draft |
 | F03 | Features & labels | M2 | F01 | 📝 Draft |
@@ -35,7 +35,7 @@ Pages Portfolios/Health complètes, e2e, Lighthouse, documentation.
 | F05 | Baselines | M2 | F04 | 📝 Draft |
 | F06 | Modèles IA & registre | M3 | F03, F04, F05 | 📝 Draft |
 | F07 | Signaux & paper trading | M3 | F04–F06 | 📝 Draft |
-| F08 | Export dashboard (complet) | M3 | F04–F07 | 📝 Draft |
+| F08 | Export dashboard (complet) | M3 | F04–F07 (pré-requis de contrat : voir spec F08) | 📝 Draft |
 | F09 | Dashboard (Portfolios, Models, Health) | M3/M4 | F08 | 📝 Draft |
 | F10 | Orchestration (weekly-train, backfill) | M3 | F06 | 📝 Draft |
 

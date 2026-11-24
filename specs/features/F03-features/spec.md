@@ -2,7 +2,7 @@
 
 - **Statut** : 📝 Draft
 - **Milestone** : M2
-- **Dépend de** : F01
+- **Dépend de** : F01 ; F08 (M1) crée `features/indicators.py` avec SMA, Bollinger et RSI, que F03 reprend et étend
 
 ## Objectif
 Construire, à partir des prix bruts, une matrice de features et des labels **sans look-ahead** (P1),
@@ -12,6 +12,7 @@ réutilisable par les stratégies ML, l'heuristique SMA et l'export dashboard.
 - **R1** `features.indicators` DOIT fournir des fonctions pures et vectorisées : rendements (1, 5, 20 j), log-rendements,
   SMA/EMA (10, 20, 50, 200), ratio prix/SMA, RSI(14), MACD(12,26,9), Bollinger(20, 2σ) %B et largeur,
   ATR(14), volatilité réalisée (20 j), volume relatif (volume / moyenne 20 j), drawdown depuis plus haut 52 sem.
+  `sma`, `bollinger` et `rsi_wilder` existent déjà (F08 R7) : F03 les réutilise sans les dupliquer ni changer leur résultat.
 - **R2** Les features de marché DOIVENT inclure le rendement et la volatilité du benchmark (SPY) aux mêmes dates.
 - **R3** Toute feature à la date `t` DOIT être calculable uniquement avec les barres `<= t`.
 - **R4** `features.labels` DOIT produire le label `dir_h` = 1 si `adj_close[t+h] / adj_close[t] - 1 > seuil` sinon 0 (h=5, seuil=0 par défaut, paramétrables) ; les lignes sans futur connu ont un label `NaN`.

@@ -168,11 +168,124 @@ Avertissements : `missing_session` (plage, `value` = nombre de séances), `large
 Les sections des étapes suivantes (`signal`, etc.) sont définies par leurs features.
 
 ## 7. Export dashboard — `dashboard/public/data/` (non commité)
-| Fichier | Contenu | Taille cible |
-|---|---|---|
-| `manifest.json` | dates, liste tickers, stratégies, version | < 10 Ko |
-| `overview.json` | leaderboard, derniers signaux, KPIs | < 100 Ko |
-| `tickers/{SYMBOL}.json` | OHLCV + indicateurs (SMA20/50/200, RSI, Bollinger) + marqueurs de signaux | < 500 Ko |
-| `portfolios/{strategy_id}.json` | courbe d'equity, positions, trades, drawdown | < 200 Ko |
-| `models.json` | model cards, métriques OOS, distribution des random traders | < 200 Ko |
-| `health.json` | fraîcheur des données, derniers runs | < 20 Ko |
+Produit par `th export` (F08). Modèles pydantic `ManifestFile`, `TickerFile`, `OverviewFile`, `HealthFile` (M1),
+`PortfolioExportFile`, `ModelsFile` (M3) dans `schemas.py` ; types TS générés dans `dashboard/src/types/`.
+
+| Fichier | Contenu | Taille cible | Milestone |
+|---|---|---|---|
+| `manifest.json` | dates, tickers, stratégies, version, hash des fichiers | < 10 Ko | M1 |
+| `overview.json` | dernier cours + sparkline par ticker ; leaderboard, derniers signaux, KPIs | < 100 Ko | M1 (leaderboard, signaux, KPIs vides) / M3 |
+| `tickers/{SYMBOL}.json` | OHLCV + indicateurs (SMA20/50/200, Bollinger, RSI14) + marqueurs de signaux | < 500 Ko | M1 |
+| `health.json` | fraîcheur par ticker, derniers runs, avertissements qualité | < 20 Ko | M1 |
+| `portfolios/{strategy_id}.json` | courbe d'equity, drawdown, positions, trades, `model_switch`, métriques live | < 200 Ko | M3 |
+| `models.json` | model cards, métriques OOS, distribution des random traders, calibration | < 200 Ko | M3 |
+
+**Format commun** : JSON minifié (séparateurs `,` et `:`), UTF-8, champ `schema_version` (1) dans chaque fichier ;
+`null` pour une valeur indisponible (jamais `NaN`). Arrondis : prix et indicateurs de prix 4 décimales ; RSI 2 ;
+ratios, rendements, poids, confiances, métriques 4 ; montants 2 ; volumes et quantités entiers. Les exemples ci-dessous
+sont indentés pour la lecture.
+
+### `manifest.json`
+```json
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-23T22:50:12Z",
+  "data_as_of": "2026-11-23",
+  "git_sha": "430115d…",
+  "currency": "USD",
+  "benchmark": "SPY",
+  "tickers": [
+    { "symbol": "AAPL", "name": "Apple Inc.", "sector": "Information Technology", "benchmark": false,
+      "first_date": "2010-01-04", "last_date": "2026-11-23" },
+    { "symbol": "SPY", "name": "SPY", "sector": null, "benchmark": true,
+      "first_date": "2010-01-04", "last_date": "2026-11-23" }
+  ],
+  "strategies": [],
+  "files": [
+    { "path": "health.json", "sha256": "9f2c4e1a7b3d5c60", "bytes": 4210 },
+    { "path": "tickers/AAPL.json", "sha256": "1a2b3c4d5e6f7a8b", "bytes": 401233 }
+  ]
+}
+```
+`data_as_of` = plus petite dernière date des symboles exportés (univers + benchmark ayant un fichier), `null` sinon.
+`git_sha` = `GITHUB_SHA`, sinon `git rev-parse HEAD`, sinon `null`. `files` : tous les fichiers produits sauf le manifest,
+triés par `path` ; `sha256` = 16 premiers caractères hexadécimaux. M3 : `strategies` =
+`[{ "id": "lgbm_dir5_v3", "kind": "model", "model_id": "lgbm_dir5_20261122_ab12cd", "sharpe_oos": 1.1 }]`
+(`kind ∈ {baseline, model}`, `model_id` à `null` pour une baseline).
+
+### `tickers/{SYMBOL}.json`
+Format colonnes : chaque tableau de `series` a la même longueur ; valeurs de warm-up à `null`.
+```json
+{
+  "schema_version": 1,
+  "symbol": "AAPL",
+  "series": {
+    "date":     ["2026-11-20", "2026-11-23"],
+    "open":     [228.1, 231.0],
+    "high":     [231.45, 233.12],
+    "low":      [227.8, 229.6],
+    "close":    [230.95, 232.4],
+    "volume":   [51234000, 48765000],
+    "sma20":    [226.418, 226.9905],
+    "sma50":    [221.0712, 221.3304],
+    "sma200":   [205.5521, 205.7413],
+    "bb_upper": [233.1022, 233.8817],
+    "bb_lower": [219.7338, 220.0993],
+    "rsi14":    [61.42, 63.87]
+  },
+  "markers": [
+    { "date": "2026-11-20", "strategy_id": "lgbm_dir5_v3", "action": "BUY", "confidence": 0.67 }
+  ]
+}
+```
+OHLC ajustés des splits (tels que stockés, §2). Indicateurs sur `close`, fenêtres passées uniquement (P1) :
+SMA(20, 50, 200), Bollinger(20, 2σ, écart-type de population), RSI(14) de Wilder. `markers` : signaux BUY/SELL de
+`data/signals/*.json` (HOLD exclus), triés par date puis `strategy_id` ; vide en M1.
+
+### `overview.json`
+```json
+{
+  "schema_version": 1,
+  "data_as_of": "2026-11-23",
+  "tickers": [
+    { "symbol": "AAPL", "last_close": 232.4, "change_1d": 0.0063, "spark": [221.3, 222.05, 232.4] }
+  ],
+  "leaderboard": [],
+  "latest_signals": [],
+  "kpis": { "best_strategy_30d": null }
+}
+```
+`spark` : 60 dernières clôtures au plus ; `change_1d` à `null` s'il n'y a qu'une barre. M3 : ligne de `leaderboard` =
+`{ "strategy_id", "kind", "equity", "return_30d", "sharpe_oos", "random_percentile" }` (baselines toujours présentes, P3) ;
+`latest_signals` = signaux de `latest.json` (§4) enrichis de `model_id` et `sharpe_oos` (P8).
+
+### `health.json`
+```json
+{
+  "schema_version": 1,
+  "last_session": "2026-11-23",
+  "tickers": [
+    { "symbol": "AAPL", "last_date": "2026-11-23", "sessions_behind": 0, "stale": false },
+    { "symbol": "TSLA", "last_date": null, "sessions_behind": null, "stale": true }
+  ],
+  "runs": [
+    {
+      "session_date": "2026-11-23",
+      "ingest": { "exit_code": 0, "ok": 20, "unchanged": 0, "failed": 1, "history_rewritten": ["AAPL"] },
+      "validate": { "exit_code": 0, "violations": 0, "warnings": 2 }
+    }
+  ],
+  "quality_warnings": [
+    { "symbol": "NVDA", "rule": "large_move", "start": "2026-11-23", "end": "2026-11-23", "value": 0.6 }
+  ],
+  "quality_warnings_truncated": 0
+}
+```
+`last_session` = `S` au moment de l'export. `tickers` : univers + benchmark ; `stale` comme F02 (`last_date < S − 3
+séances`, `true` sans fichier). `runs` : 10 rapports les plus récents, par `session_date` décroissante, résumés depuis la
+dernière exécution de chaque section (`null` si absente). `quality_warnings` : avertissements (format §6) de la dernière
+exécution `validate` du rapport le plus récent qui en contient une, 100 au plus.
+
+### `portfolios/{strategy_id}.json` et `models.json` (M3)
+Format détaillé à fixer avant l'implémentation M3 de F08, une fois réglés les pré-requis listés dans la spec F08
+(`model_switch` et `pending_orders` en §3, calibration en §5, stockage de la distribution des random traders par F05).
