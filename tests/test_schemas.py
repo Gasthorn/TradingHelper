@@ -22,6 +22,7 @@ from tradinghelper.schemas import (
     IngestWarning,
     PricesFile,
     RunReport,
+    SignalsFile,
     ValidateRun,
     ValidateViolation,
     ValidateWarning,
@@ -566,3 +567,72 @@ def test_schemas_command_works_without_config(
     assert result.exit_code == 0, result.output
     assert sorted(p.name for p in out_dir.iterdir()) == EXPECTED_SCHEMA_FILES
     assert "prices.schema.json" in result.stdout
+
+
+# --- Signaux — contrat §4 (F08 T5 ; réutilisés par F07) ------------------------------------------
+
+
+def _valid_signals() -> dict[str, Any]:
+    data: dict[str, Any] = _contract_example("4")
+    return data
+
+
+def _signals_with(**changes: Any) -> dict[str, Any]:
+    data = _valid_signals()
+    data["signals"][0].update(copy.deepcopy(changes))
+    return data
+
+
+def test_signals_file_contract_example_valid() -> None:
+    signals = SignalsFile.model_validate(_valid_signals())
+
+    (signal,) = signals.signals
+    assert signal.action == "BUY"
+    assert signal.explanation is not None
+    assert signal.explanation[0].feature == "rsi_14"
+
+
+def test_signals_file_explanation_is_optional() -> None:
+    data = _valid_signals()
+    del data["signals"][0]["explanation"]
+
+    (signal,) = SignalsFile.model_validate(data).signals
+
+    assert signal.explanation is None
+
+
+def test_signals_file_accepts_hold_and_sell() -> None:
+    for action in ("HOLD", "SELL"):
+        (signal,) = SignalsFile.model_validate(_signals_with(action=action)).signals
+        assert signal.action == action
+
+
+def _signals_top_level(**changes: Any) -> dict[str, Any]:
+    data = _valid_signals()
+    data.update(changes)
+    return data
+
+
+INVALID_SIGNALS: dict[str, dict[str, Any]] = {
+    "action_inconnue": _signals_with(action="STRONG_BUY"),
+    "confidence_sup_1": _signals_with(confidence=1.01),
+    "confidence_negative": _signals_with(confidence=-0.01),
+    "confidence_nan": _signals_with(confidence=float("nan")),
+    "target_weight_negatif": _signals_with(target_weight=-0.1),
+    "target_weight_sup_1": _signals_with(target_weight=1.5),
+    "horizon_nul": _signals_with(horizon_days=0),
+    "symbole_invalide": _signals_with(symbol="aapl"),
+    "cle_inconnue_signal": _signals_with(model="x"),
+    "explication_6_entrees": _signals_with(
+        explanation=[{"feature": f"f{i}", "contribution": 0.1} for i in range(6)]
+    ),
+    "cle_inconnue_fichier": _signals_top_level(extra=1),
+    "schema_version_2": _signals_top_level(schema_version=2),
+    "generated_at_non_utc": _signals_top_level(generated_at="2026-11-23T22:45:00+01:00"),
+}
+
+
+@pytest.mark.parametrize("data", list(INVALID_SIGNALS.values()), ids=list(INVALID_SIGNALS))
+def test_signals_file_rules(data: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        SignalsFile.model_validate(data)

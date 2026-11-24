@@ -46,7 +46,7 @@
 
 ## Contrats (`schemas.py`)
 
-- [ ] **T5** [P] `Signal` et `SignalsFile` (contrat §4) — R4, R9
+- [x] **T5** [P] `Signal` et `SignalsFile` (contrat §4) — R4, R9
   - Tests : `tests/test_schemas.py::test_signals_file_contract_example_valid` (exemple du §4), `::test_signals_file_rules[...]`,
     paramétré sur : `action` hors {BUY, HOLD, SELL}, `confidence` > 1 ou < 0, `target_weight` < 0, `horizon_days` = 0,
     clé inconnue, `schema_version: 2` → refusés ; `explanation` absente → acceptée.

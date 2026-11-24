@@ -20,6 +20,7 @@ from pydantic import (
     Field,
     NonNegativeFloat,
     NonNegativeInt,
+    PositiveInt,
     field_validator,
     model_validator,
 )
@@ -282,6 +283,48 @@ class RunReport(BaseModel):
     # `validate` masquerait la méthode `BaseModel.validate` : champ Python `validate_`,
     # clé JSON `validate` (F02 R8).
     validate_: list[ValidateRun] = Field(default_factory=list, alias="validate")
+
+
+# --- Signaux — `data/signals/{YYYY-MM-DD}.json` + `latest.json` (contrat §4) --------------------
+# Définis par F08 (lecture des marqueurs dès M1), écrits par F07.
+
+Action = Literal["BUY", "HOLD", "SELL"]
+
+#: Nombre maximal de contributions expliquant un signal (contrat §4 : « top 5 »).
+MAX_EXPLANATION: Final = 5
+
+# Fraction dans [0, 1], finie.
+UnitFloat = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+
+
+class FeatureContribution(_Contract):
+    """Contribution d'une feature à la prédiction (SHAP / gain)."""
+
+    feature: str
+    contribution: Annotated[float, Field(allow_inf_nan=False)]
+
+
+class Signal(_Contract):
+    """Signal d'une stratégie pour un symbole à une séance."""
+
+    strategy_id: str
+    symbol: Symbol
+    action: Action
+    confidence: UnitFloat
+    target_weight: UnitFloat
+    horizon_days: PositiveInt
+    explanation: Annotated[list[FeatureContribution], Field(max_length=MAX_EXPLANATION)] | None = (
+        None
+    )
+
+
+class SignalsFile(_Contract):
+    """Signaux de toutes les stratégies actives pour une séance."""
+
+    schema_version: Literal[1]
+    date: date
+    generated_at: UtcDatetime
+    signals: list[Signal]
 
 
 # --- Génération des JSON Schemas (`th schemas`) -------------------------------------------------
