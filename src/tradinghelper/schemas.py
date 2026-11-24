@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime
+from itertools import pairwise
 from pathlib import Path
 from typing import Annotated, Final, Literal, Self
 
@@ -432,6 +433,143 @@ class OverviewFile(_Contract):
     leaderboard: list[LeaderboardRow]
     latest_signals: list[ExportSignal]
     kpis: Kpis
+
+
+#: Nom du manifest, qui ne figure pas dans sa propre liste de fichiers (R11).
+MANIFEST_NAME: Final = "manifest.json"
+
+#: Chemin relatif au dossier d'export, séparateur `/` (ex. `tickers/BRK.B.json`).
+ExportPath = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)*$")]
+
+#: SHA git abrégé (7 caractères au moins) ou complet.
+GitSha = Annotated[str, Field(pattern=r"^[0-9a-f]{7,40}$")]
+
+
+class ManifestTicker(_Contract):
+    """Symbole exporté (R11) ; pour le benchmark hors univers, nom = symbole et secteur `null`."""
+
+    symbol: Symbol
+    name: str
+    sector: str | None
+    benchmark: bool
+    first_date: date
+    last_date: date
+
+
+class ManifestStrategy(_Contract):
+    """Stratégie exportée (M3, R16) : modèle champion et performance, pour l'affichage P8."""
+
+    id: str
+    kind: StrategyKind
+    model_id: str | None  # None pour une baseline
+    sharpe_oos: Num | None
+
+
+class ManifestEntry(_Contract):
+    """Fichier produit par l'export : empreinte pour le cache-busting du front (R11)."""
+
+    path: ExportPath
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{16}$")]  # 16 premiers caractères hex
+    bytes: NonNegativeInt
+
+
+class ManifestFile(_Contract):
+    """`manifest.json` (R11)."""
+
+    schema_version: Literal[1]
+    generated_at: UtcDatetime
+    data_as_of: date | None
+    git_sha: GitSha | None
+    currency: Literal["USD"]
+    benchmark: Symbol
+    tickers: list[ManifestTicker]
+    strategies: list[ManifestStrategy]
+    files: list[ManifestEntry]
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        paths = [entry.path for entry in self.files]
+        if paths != sorted(set(paths)):
+            raise ValueError("`files` doit être trié par `path`, sans doublon")
+        if MANIFEST_NAME in paths:
+            raise ValueError(f"`files` ne liste pas `{MANIFEST_NAME}` lui-même")
+        symbols = [ticker.symbol for ticker in self.tickers]
+        if len(symbols) != len(set(symbols)):
+            raise ValueError("symbole dupliqué dans `tickers`")
+        return self
+
+
+#: Nombre maximal de rapports de run résumés dans `health.json` (R12).
+HEALTH_RUNS: Final = 10
+
+#: Nombre maximal d'avertissements qualité exportés (R12).
+MAX_QUALITY_WARNINGS: Final = 100
+
+
+class HealthTicker(_Contract):
+    """Fraîcheur d'un symbole de l'univers ou du benchmark (R12)."""
+
+    symbol: Symbol
+    last_date: date | None  # None : aucun fichier de prix
+    sessions_behind: NonNegativeInt | None  # séances NYSE entre `last_date` et `S`
+    stale: bool  # même définition que F02 : last_date < S - 3 séances
+
+    @model_validator(mode="after")
+    def _missing_file_is_stale(self) -> Self:
+        if (self.last_date is None) != (self.sessions_behind is None):
+            raise ValueError("`sessions_behind` est nul si et seulement si `last_date` est nul")
+        if self.last_date is None and not self.stale:
+            raise ValueError("un symbole sans fichier de prix est `stale`")
+        return self
+
+
+class HealthIngest(_Contract):
+    """Résumé de la dernière exécution `ingest` d'un rapport de run."""
+
+    exit_code: Literal[0, 1]
+    ok: NonNegativeInt
+    unchanged: NonNegativeInt
+    failed: NonNegativeInt
+    history_rewritten: list[Symbol]
+
+
+class HealthValidate(_Contract):
+    """Résumé de la dernière exécution `validate` d'un rapport de run."""
+
+    exit_code: Literal[0, 1]
+    violations: NonNegativeInt
+    warnings: NonNegativeInt
+
+
+class HealthRun(_Contract):
+    """Résumé d'un rapport de run ; section absente → `null`. Sérialiser avec `by_alias=True`."""
+
+    model_config = ConfigDict(
+        extra="forbid", frozen=True, validate_by_name=True, validate_by_alias=True
+    )
+
+    session_date: date
+    ingest: HealthIngest | None
+    # Même contrainte que `RunReport` : champ Python `validate_`, clé JSON `validate`.
+    validate_: HealthValidate | None = Field(alias="validate")
+
+
+class HealthFile(_Contract):
+    """`health.json` (R12)."""
+
+    schema_version: Literal[1]
+    last_session: date  # `S` au moment de l'export
+    tickers: list[HealthTicker]
+    runs: Annotated[list[HealthRun], Field(max_length=HEALTH_RUNS)]
+    quality_warnings: Annotated[list[ValidateWarning], Field(max_length=MAX_QUALITY_WARNINGS)]
+    quality_warnings_truncated: NonNegativeInt
+
+    @model_validator(mode="after")
+    def _runs_most_recent_first(self) -> Self:
+        sessions = [run.session_date for run in self.runs]
+        if any(older >= newer for newer, older in pairwise(sessions)):
+            raise ValueError("`runs` doit être trié par `session_date` strictement décroissant")
+        return self
 
 
 # --- Génération des JSON Schemas (`th schemas`) -------------------------------------------------

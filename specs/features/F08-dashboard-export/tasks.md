@@ -62,7 +62,7 @@
     `LeaderboardRow`, `ExportSignal`, `Kpis`, `OverviewFile`), `tests/test_schemas.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T7** Modèles `ManifestFile` et `HealthFile` — R4, R11, R12
+- [x] **T7** Modèles `ManifestFile` et `HealthFile` — R4, R11, R12
   - Tests : `test_schemas.py::test_manifest_contract_example_valid`, `::test_manifest_files_sorted_and_unique`,
     `::test_manifest_sha256_16_hex`, `::test_manifest_git_sha_pattern_or_null`, `::test_health_contract_example_valid`,
     `::test_health_ticker_without_file_must_be_stale`, `::test_health_run_validate_alias_roundtrip` (clé JSON `validate`,

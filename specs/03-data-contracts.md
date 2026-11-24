@@ -191,7 +191,7 @@ sont indentés pour la lecture.
   "schema_version": 1,
   "generated_at": "2026-11-23T22:50:12Z",
   "data_as_of": "2026-11-23",
-  "git_sha": "430115d…",
+  "git_sha": "430115d4c1f0e2b3a49587c6d1e0f2a3b4c5d6e7",
   "currency": "USD",
   "benchmark": "SPY",
   "tickers": [

@@ -16,12 +16,17 @@ from typer.testing import CliRunner
 
 from tradinghelper.cli import app
 from tradinghelper.schemas import (
+    HEALTH_RUNS,
+    MAX_QUALITY_WARNINGS,
     PRICE_COLUMNS,
     SCHEMA_MODELS,
     SPARK_LENGTH,
     ExportSignal,
+    HealthFile,
+    HealthRun,
     IngestTickerResult,
     IngestWarning,
+    ManifestFile,
     OverviewFile,
     PricesFile,
     RunReport,
@@ -773,3 +778,178 @@ def test_export_signal_extends_signal() -> None:
     assert {"model_id", "sharpe_oos"} <= set(ExportSignal.model_fields)
     with pytest.raises(ValidationError):  # champs P8 obligatoires (nuls autorisés)
         ExportSignal.model_validate(_valid_signals()["signals"][0])
+
+
+# --- Export dashboard : manifest et santé — contrat §7 (F08 T7) ----------------------------------
+
+
+def _manifest_example() -> dict[str, Any]:
+    data: dict[str, Any] = _contract_example("7", EXPORT_MANIFEST)
+    return data
+
+
+def _health_example() -> dict[str, Any]:
+    data: dict[str, Any] = _contract_example("7", EXPORT_HEALTH)
+    return data
+
+
+def test_manifest_contract_example_valid() -> None:
+    manifest = ManifestFile.model_validate(_manifest_example())
+
+    benchmark = manifest.tickers[-1]
+    assert (benchmark.symbol, benchmark.name, benchmark.sector) == ("SPY", "SPY", None)
+    assert benchmark.benchmark is True
+    assert manifest.strategies == []
+
+
+def test_manifest_m3_strategy_typed() -> None:
+    data = _manifest_example()
+    data["strategies"] = [
+        {"id": "lgbm_dir5_v3", "kind": "model", "model_id": "lgbm_dir5_20261122_ab12cd",
+         "sharpe_oos": 1.1},
+        {"id": "buy_hold", "kind": "baseline", "model_id": None, "sharpe_oos": None},
+    ]  # fmt: skip
+
+    assert [s.kind for s in ManifestFile.model_validate(data).strategies] == ["model", "baseline"]
+
+
+def _manifest_files(*paths: str) -> dict[str, Any]:
+    data = _manifest_example()
+    data["files"] = [{"path": p, "sha256": "0123456789abcdef", "bytes": 1} for p in paths]
+    return data
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [
+        ("tickers/AAPL.json", "health.json"),  # non trié
+        ("health.json", "health.json"),  # doublon
+        ("health.json", "manifest.json"),  # le manifest ne se liste pas lui-même
+        ("/health.json",),  # chemin absolu
+        (r"tickers\AAPL.json",),  # séparateur Windows
+    ],
+    ids=["unsorted", "duplicate", "self", "absolute", "backslash"],
+)
+def test_manifest_files_sorted_and_unique(paths: tuple[str, ...]) -> None:
+    with pytest.raises(ValidationError):
+        ManifestFile.model_validate(_manifest_files(*paths))
+
+
+def test_manifest_files_accepts_dotted_symbol() -> None:
+    manifest = ManifestFile.model_validate(_manifest_files("health.json", "tickers/BRK.B.json"))
+
+    assert [f.path for f in manifest.files] == ["health.json", "tickers/BRK.B.json"]
+
+
+@pytest.mark.parametrize("sha", ["0123456789ABCDEF", "0123456789abcde", "0123456789abcdef0", "xyz"])
+def test_manifest_sha256_16_hex(sha: str) -> None:
+    data = _manifest_example()
+    data["files"][0]["sha256"] = sha
+
+    with pytest.raises(ValidationError):
+        ManifestFile.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    ("git_sha", "valid"),
+    [
+        (None, True),
+        ("430115d", True),
+        ("430115d4c1f0e2b3a49587c6d1e0f2a3b4c5d6e7", True),
+        ("430115d…", False),
+        ("430115", False),
+        ("HEAD", False),
+    ],
+)
+def test_manifest_git_sha_pattern_or_null(git_sha: str | None, valid: bool) -> None:
+    data = _manifest_example()
+    data["git_sha"] = git_sha
+
+    if valid:
+        assert ManifestFile.model_validate(data).git_sha == git_sha
+    else:
+        with pytest.raises(ValidationError):
+            ManifestFile.model_validate(data)
+
+
+def test_manifest_tickers_unique() -> None:
+    data = _manifest_example()
+    data["tickers"].append(copy.deepcopy(data["tickers"][0]))
+
+    with pytest.raises(ValidationError, match="dupliqué"):
+        ManifestFile.model_validate(data)
+
+
+def test_health_contract_example_valid() -> None:
+    health = HealthFile.model_validate(_health_example())
+
+    assert health.runs[0].validate_ is not None
+    assert health.runs[0].ingest is not None
+    assert health.runs[0].ingest.history_rewritten == ["AAPL"]
+    assert health.quality_warnings[0].rule == "large_move"
+
+
+@pytest.mark.parametrize(
+    "ticker",
+    [
+        {"symbol": "TSLA", "last_date": None, "sessions_behind": None, "stale": False},
+        {"symbol": "TSLA", "last_date": None, "sessions_behind": 3, "stale": True},
+        {"symbol": "TSLA", "last_date": "2026-11-23", "sessions_behind": None, "stale": False},
+    ],
+    ids=["missing_not_stale", "missing_with_lag", "file_without_lag"],
+)
+def test_health_ticker_without_file_must_be_stale(ticker: dict[str, Any]) -> None:
+    """R12 : sans fichier, `last_date` et `sessions_behind` nuls et `stale: true`."""
+    data = _health_example()
+    data["tickers"] = [ticker]
+
+    with pytest.raises(ValidationError):
+        HealthFile.model_validate(data)
+
+
+def test_health_run_validate_alias_roundtrip() -> None:
+    """Clé JSON `validate` (champ Python `validate_`), jamais `validate_` dans la sortie."""
+    run = _health_example()["runs"][0]
+
+    dumped = HealthRun.model_validate(run).model_dump(mode="json", by_alias=True)
+
+    assert dumped == run
+    assert "validate_" not in json.dumps(dumped)
+
+
+def test_health_run_defines_validate_without_shadow_warning() -> None:
+    code = "import warnings; warnings.simplefilter('error'); import tradinghelper.schemas"
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=False
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def _health_runs(count: int) -> list[dict[str, Any]]:
+    base = _health_example()["runs"][0]
+    return [dict(copy.deepcopy(base), session_date=f"2026-11-{30 - i:02d}") for i in range(count)]
+
+
+def test_health_limits() -> None:
+    """R12 : au plus 10 rapports et 100 avertissements."""
+    data = _health_example()
+    data["runs"] = _health_runs(HEALTH_RUNS)
+    HealthFile.model_validate(data)
+
+    data["runs"] = _health_runs(HEALTH_RUNS + 1)
+    with pytest.raises(ValidationError):
+        HealthFile.model_validate(data)
+
+    data = _health_example()
+    data["quality_warnings"] = data["quality_warnings"] * (MAX_QUALITY_WARNINGS + 1)
+    with pytest.raises(ValidationError):
+        HealthFile.model_validate(data)
+
+
+def test_health_runs_sorted_by_session_desc() -> None:
+    data = _health_example()
+    data["runs"] = list(reversed(_health_runs(3)))
+
+    with pytest.raises(ValidationError, match="décroissant"):
+        HealthFile.model_validate(data)
