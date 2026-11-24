@@ -193,7 +193,7 @@
 
 ## Dashboard
 
-- [ ] **T21** Génération des types TypeScript — R5
+- [x] **T21** Génération des types TypeScript — R5
   - Tests : vérification par commande (pas de test Python) : `npm run gen:types` deux fois de suite → aucun diff ;
     `npm run typecheck` vert ; un fichier temporaire `src/types/_check.ts` important `TickerFile` et accédant à
     `series.close` compile, puis est supprimé.
