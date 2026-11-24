@@ -107,7 +107,7 @@
     - `uv run th validate --help` décrit les deux options ;
     - qualité verte.
 
-- [ ] **T13** Écriture conditionnelle du rapport — R7
+- [x] **T13** Écriture conditionnelle du rapport — R7
   - Tests : `tests/test_cli_validate.py::test_appends_to_existing_report_keeps_ingest`, `::test_no_report_written_on_holiday_without_violation` (aucun fichier créé), `::test_report_written_with_exit_code_1` (rapport absent + violation → créé, `exit_code: 1`), `::test_report_named_after_session` (run à 00:30 UTC), `::test_unreadable_report_not_overwritten` (stderr, fichier intact, code de sortie inchangé), `::test_report_matches_json_schema` (validé par `RunReport`).
   - Fichiers : `src/tradinghelper/cli.py`.
   - Fini quand : tests verts ; qualité verte.

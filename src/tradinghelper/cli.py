@@ -28,6 +28,7 @@ from tradinghelper.data.ingest import ingest as run_ingest
 from tradinghelper.data.source import PriceSource, YFinanceSource
 from tradinghelper.data.storage import (
     RunReportError,
+    append_run_report_entry,
     data_dir,
     run_report_path,
     update_run_report,
@@ -271,11 +272,26 @@ def validate(
     """
     config: AppConfig = ctx.obj
     request = ValidateRequest(symbols=_parse_symbols(config, symbols), all_history=all_history)
+    data_root = data_dir()
     outcome = run_validate(
-        config.universe, request, calendar=NyseCalendar(), now=_now, data_root=data_dir()
+        config.universe, request, calendar=NyseCalendar(), now=_now, data_root=data_root
     )
     for violation in outcome.run.violations:
         typer.echo(_violation_line(violation), err=True)
     for line in _validate_summary(outcome):
         typer.echo(line)
+    # R7 : rapport écrit s'il existe déjà pour S (le daily l'a ouvert) ou s'il y a une violation ;
+    # sinon (jour férié, 2e run) rien n'est écrit, pour ne pas créer de commit. Toujours avant
+    # la sortie, y compris en code 1 (téléversé par F10 R4).
+    report = run_report_path(data_root, outcome.session)
+    if report.exists() or outcome.has_violations:
+        try:
+            append_run_report_entry(report, outcome.session, "validate", outcome.run)
+        except RunReportError as err:
+            # Rapport existant jamais écrasé (P7) ; code de sortie de la validation inchangé.
+            typer.echo(f"Erreur : rapport de run non écrit : {err}", err=True)
+        else:
+            typer.echo(f"Rapport : {report.as_posix()}")
+    else:
+        typer.echo("Rien à signaler : aucun rapport écrit.")
     raise typer.Exit(code=outcome.run.exit_code)

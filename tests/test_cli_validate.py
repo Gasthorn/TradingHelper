@@ -6,10 +6,12 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner, Result
@@ -17,8 +19,8 @@ from typer.testing import CliRunner, Result
 from fakes import FakeClock
 from tradinghelper import cli
 from tradinghelper.data.calendar import NyseCalendar
-from tradinghelper.data.storage import dumps_prices, prices_dir, prices_path
-from tradinghelper.schemas import PRICE_COLUMNS, Bar, PricesFile
+from tradinghelper.data.storage import dumps_prices, prices_dir, prices_path, run_report_path
+from tradinghelper.schemas import PRICE_COLUMNS, Bar, PricesFile, RunReport
 
 from conftest import WriteConfig
 
@@ -207,3 +209,134 @@ def test_symbols_restricts_validation(th: _Cli) -> None:
 
     assert result.exit_code == 0, result.output
     assert "1 fichier(s) vérifié(s)" in result.stdout
+
+
+# --- Écriture conditionnelle du rapport (R7) ---------------------------------------------------
+
+
+def _report_file(th: _Cli, session: date = S) -> Path:
+    return run_report_path(th.data, session)
+
+
+def _ingest_report(th: _Cli) -> dict[str, Any]:
+    report = {
+        "schema_version": 1,
+        "session_date": S.isoformat(),
+        "ingest": [
+            {
+                "started_at": "2026-11-24T22:31:02Z",
+                "finished_at": "2026-11-24T22:32:10Z",
+                "duration_s": 68.0,
+                "args": {"symbols": None, "full": False, "start": None},
+                "exit_code": 0,
+                "tickers": [],
+                "warnings": [],
+            }
+        ],
+    }
+    target = _report_file(th)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    return report
+
+
+def test_appends_to_existing_report_keeps_ingest(th: _Cli) -> None:
+    _fresh_universe(th, "MSFT", "SPY")
+    th.put_fixture("AAPL", JUMP)
+    existing = _ingest_report(th)
+
+    result = th()
+
+    assert result.exit_code == 0, result.output
+    data = json.loads(_report_file(th).read_text(encoding="utf-8"))
+    assert data["ingest"] == existing["ingest"]
+    (entry,) = data["validate"]
+    assert entry["exit_code"] == 0
+    assert [w["rule"] for w in entry["warnings"]] == ["large_move"]
+    assert _report_file(th).name in result.stdout
+
+
+def test_no_report_written_on_holiday_without_violation(th: _Cli) -> None:
+    """Thanksgiving, aucun rapport du jour, aucune violation : aucun fichier écrit."""
+    _fresh_universe(th, "AAPL", "MSFT", "SPY")
+    th.clock.now = datetime(2026, 11, 26, 22, 30, tzinfo=UTC)  # S = 2026-11-25
+
+    result = th()
+
+    assert result.exit_code == 0, result.output
+    assert not (th.data / "runs").exists()
+    assert "aucun rapport écrit" in result.stdout
+
+
+def test_report_written_with_exit_code_1(th: _Cli) -> None:
+    _fresh_universe(th, "MSFT", "SPY")
+    th.put_fixture("AAPL", CORRUPTED)
+
+    result = th()
+
+    assert result.exit_code == 1
+    report = RunReport.model_validate_json(_report_file(th).read_text(encoding="utf-8"))
+    (entry,) = report.validate_
+    assert entry.exit_code == 1
+    assert {v.rule for v in entry.violations} == {"dates_not_increasing", "ohlc_inconsistent"}
+    assert report.ingest == []
+    assert "ingest" not in json.loads(_report_file(th).read_text(encoding="utf-8"))
+
+
+def test_report_named_after_session(th: _Cli) -> None:
+    """Run à 00:30 UTC le 25/11 : la dernière séance clôturée reste le 24/11."""
+    _fresh_universe(th, "MSFT", "SPY")
+    th.put_fixture("AAPL", CORRUPTED)
+    th.clock.now = datetime(2026, 11, 25, 0, 30, tzinfo=UTC)
+
+    th()
+
+    assert [p.name for p in (th.data / "runs").iterdir()] == ["2026-11-24.json"]
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"{tronqu", b'{"schema_version": 1, "session_date": "2026-11-23"}'],
+    ids=["JSON invalide", "autre séance"],
+)
+def test_unreadable_report_not_overwritten(th: _Cli, content: bytes) -> None:
+    _fresh_universe(th, "MSFT", "SPY")
+    th.put_fixture("AAPL", CORRUPTED)
+    target = _report_file(th)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(content)
+
+    result = th()
+
+    assert result.exit_code == 1  # code de la validation, inchangé (décision 3 du plan)
+    assert target.read_bytes() == content
+    assert "rapport de run non écrit" in result.stderr
+    assert "Traceback" not in result.output
+
+
+def test_unreadable_report_keeps_exit_0_without_violation(th: _Cli) -> None:
+    _fresh_universe(th, "AAPL", "MSFT", "SPY")
+    target = _report_file(th)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"{tronqu")
+
+    result = th()
+
+    assert result.exit_code == 0
+    assert target.read_bytes() == b"{tronqu"
+    assert "rapport de run non écrit" in result.stderr
+
+
+def test_report_matches_json_schema(th: _Cli) -> None:
+    _fresh_universe(th, "MSFT", "SPY")
+    th.put_fixture("AAPL", CORRUPTED)
+    _ingest_report(th)
+
+    th()
+    th("--all-history")
+
+    data = json.loads(_report_file(th).read_text(encoding="utf-8"))
+    report = RunReport.model_validate(data)
+    assert len(report.validate_) == 2
+    assert report.validate_[1].args.all_history is True
+    assert "validate_" not in data
