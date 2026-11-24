@@ -1,6 +1,6 @@
 # F08 — Export des données pour le dashboard
 
-- **Statut** : 🚧 In progress (M1) — M3 : ✅ Approved, plan à compléter
+- **Statut** : 🔍 Verifying (M1, 17/17 critères prouvés) — M3 : ✅ Approved, plan à compléter
 - **Milestone** : M1 (partiel : exigences et critères `[M1]`) puis M3 (complet : `[M3]`)
 - **Dépend de** : F01, F02 (M1) ; F04–F07 pour les sections `[M3]`
 - **Contrats** : `03-data-contracts.md` §7 (production) ; §1, §2, §6 (lecture) ; §3, §4, §5 (lecture, M3)
@@ -116,36 +116,36 @@ compacts, pré-calculés, validés par schéma et optimisés pour le navigateur,
 ## Critères d'acceptation
 
 ### M1
-- [ ] Dépôt avec seulement des prix et des rapports de run (fixtures) : `th export` → code 0, fichiers `manifest`,
+- [x] Dépôt avec seulement des prix et des rapports de run (fixtures) : `th export` → code 0, fichiers `manifest`,
   `overview`, `health`, `tickers/*` (benchmark compris) produits ; `markers`, `leaderboard`, `latest_signals`,
-  `strategies` vides ; aucun fichier `portfolios/` ni `models.json` requis. (R1, R6, R13)
-- [ ] Chaque fichier produit est validé par son modèle pydantic **et** par son JSON Schema (`jsonschema`, Draft 2020-12) ;
-  `schemas/` est synchronisé (`test_generated_schemas_match_committed`). (R1, R4)
-- [ ] `npm run gen:types` ne produit aucun diff et `npm run typecheck` passe avec les types générés. (R5)
-- [ ] Un fichier `tickers/OLD.json` présent dans `--out` a disparu après l'export ; une exception simulée en cours
-  d'export laisse `--out` identique et ne laisse pas de dossier temporaire. (R2)
-- [ ] Un fichier de prix corrompu → code 1, fichier cité sur stderr, `--out` inchangé ; erreur de config ou argument
-  invalide → code 2 ; `--out` personnalisé et `TH_DATA_DIR` respectés. (R3)
-- [ ] SMA20/50/200, Bollinger(20, 2) et RSI14 comparés à des valeurs de référence calculées à la main / au tableur sur une
-  fixture, à 1e-4 près ; série plate → RSI 50 ; série strictement croissante → RSI 100. (R7)
-- [ ] Le nombre de `null` de warm-up est exact (19, 49, 199, 19, 14) ; un ticker de moins de 200 barres a `sma200`
-  entièrement `null` ; aucun `NaN` dans la sortie. (R8, R14)
-- [ ] Test de propriété (hypothesis) : pour tout `t`, les indicateurs à `t` calculés sur la série tronquée à `t` sont égaux
-  à ceux calculés sur la série complète. (R8)
-- [ ] Avec une fixture `data/signals/` (BUY le 2026-11-20, HOLD le 2026-11-21, SELL le 2026-11-23 sur AAPL),
-  `tickers/AAPL.json` contient exactement les marqueurs BUY et SELL aux bonnes dates avec leur confiance. (R9)
-- [ ] `overview.json` contient `spark` de 60 valeurs (moins pour un historique court) et `change_1d` correct. (R10)
-- [ ] Le `sha256` et les `bytes` de chaque fichier du manifest correspondent aux fichiers réels ; `git_sha` vaut
-  `GITHUB_SHA` s'il est défini et `null` hors dépôt git ; `data_as_of` vaut la date du symbole le plus en retard. (R11)
-- [ ] `health.json` : symbole de l'univers sans fichier → `last_date: null`, absent de `tickers/` et du manifest ;
+  `strategies` vides ; aucun fichier `portfolios/` ni `models.json` requis. (R1, R6, R13) — Preuve : `test_dashboard.py::test_prices_only_repo_exports_m1_files` (6 fichiers exactement, sections M3 vides, pas de `portfolios/` ni `models.json`), `test_cli_export.py::test_exports_to_default_out` ; réel : T24.
+- [x] Chaque fichier produit est validé par son modèle pydantic **et** par son JSON Schema (`jsonschema`, Draft 2020-12) ;
+  `schemas/` est synchronisé (`test_generated_schemas_match_committed`). (R1, R4) — Preuve : `test_schemas.py::test_export_outputs_match_json_schemas` (7 fichiers d'un export validés par `jsonschema` Draft 2020-12), `::test_json_schema_detects_contract_violation`, `::test_generated_schemas_match_committed`, `::test_no_stale_committed_schema` ; modèles pydantic appliqués à la construction (`build.py`).
+- [x] `npm run gen:types` ne produit aucun diff et `npm run typecheck` passe avec les types générés. (R5) — Preuve : `npm run gen:types` puis `test -z "$(git status --porcelain -- src/types)"` OK, `npm run typecheck` OK (vérification) ; étape CI `Types générés à jour` (`test_repo_hygiene.py::test_ci_dashboard_job_checks_generated_types`).
+- [x] Un fichier `tickers/OLD.json` présent dans `--out` a disparu après l'export ; une exception simulée en cours
+  d'export laisse `--out` identique et ne laisse pas de dossier temporaire. (R2) — Preuve : `test_dashboard.py::test_replace_dir_removes_stale_files`, `::test_failure_during_write_keeps_previous_export`, `::test_no_temp_dir_left_after_failure`, `::test_failure_after_move_restores_previous_export`.
+- [x] Un fichier de prix corrompu → code 1, fichier cité sur stderr, `--out` inchangé ; erreur de config ou argument
+  invalide → code 2 ; `--out` personnalisé et `TH_DATA_DIR` respectés. (R3) — Preuve : `test_cli_export.py::test_corrupted_price_file_exits_1_and_names_file`, `::test_all_bad_sources_listed`, `::test_config_error_exits_2`, `::test_dangerous_out_exits_2[data|.|config]`, `::test_custom_out_and_data_dir`.
+- [x] SMA20/50/200, Bollinger(20, 2) et RSI14 comparés à des valeurs de référence calculées à la main / au tableur sur une
+  fixture, à 1e-4 près ; série plate → RSI 50 ; série strictement croissante → RSI 100. (R7) — Preuve : `test_indicators.py::test_sma_reference_values[5|20]`, `::test_bollinger_reference_values`, `::test_rsi_reference_values` (fixture `indicators_reference.json` calculée sans numpy, en fractions exactes), `::test_rsi_flat_series_is_50`, `::test_rsi_strictly_increasing_is_100` ; SMA50/200 et application à l'export : `test_build.py::test_ticker_indicators_match_functions_and_are_rounded`.
+- [x] Le nombre de `null` de warm-up est exact (19, 49, 199, 19, 14) ; un ticker de moins de 200 barres a `sma200`
+  entièrement `null` ; aucun `NaN` dans la sortie. (R8, R14) — Preuve : `test_indicators.py::test_warmup_lengths[sma20|sma50|sma200|bb_upper|bb_lower|rsi14]`, `test_build.py::test_short_history_sma200_all_null`, `::test_no_nan_in_output`, `::test_render_refuses_nan`, `test_schemas.py::test_export_floats_reject_nan`.
+- [x] Test de propriété (hypothesis) : pour tout `t`, les indicateurs à `t` calculés sur la série tronquée à `t` sont égaux
+  à ceux calculés sur la série complète. (R8) — Preuve : `test_indicators.py::test_no_lookahead` (6 indicateurs, séries de 2 à 400 valeurs) ; efficacité vérifiée par mutation (look-ahead injecté dans `sma` puis `rsi_wilder` → échec, T4) ; garde-fou `::test_lookahead_detector_catches_centered_window`.
+- [x] Avec une fixture `data/signals/` (BUY le 2026-11-20, HOLD le 2026-11-21, SELL le 2026-11-23 sur AAPL),
+  `tickers/AAPL.json` contient exactement les marqueurs BUY et SELL aux bonnes dates avec leur confiance. (R9) — Preuve : `test_dashboard.py::test_signals_fixture_markers_on_aapl` (BUY 20/11 à 0,67, SELL 23/11 à 0,38, HOLD exclu), `test_build.py::test_markers_buy_sell_only_sorted`. Le HOLD de la fixture est au 2026-11-19 : le 2026-11-21 est un samedi.
+- [x] `overview.json` contient `spark` de 60 valeurs (moins pour un historique court) et `change_1d` correct. (R10) — Preuve : `test_build.py::test_overview_spark_60_values`, `::test_overview_short_history_spark`, `::test_change_1d`, `::test_change_1d_null_single_bar`.
+- [x] Le `sha256` et les `bytes` de chaque fichier du manifest correspondent aux fichiers réels ; `git_sha` vaut
+  `GITHUB_SHA` s'il est défini et `null` hors dépôt git ; `data_as_of` vaut la date du symbole le plus en retard. (R11) — Preuve : `test_dashboard.py::test_manifest_hashes_match_written_files`, `test_build.py::test_manifest_hashes_match_files`, `test_dashboard.py::test_git_sha_from_env`, `::test_git_sha_from_git_repo`, `::test_git_sha_null_outside_git`, `test_build.py::test_data_as_of_is_min_last_date` ; réel : empreintes vérifiées dans le navigateur (T24).
+- [x] `health.json` : symbole de l'univers sans fichier → `last_date: null`, absent de `tickers/` et du manifest ;
   ticker à `S − 4 séances` → `stale: true` (`now_utc` injecté) ; 12 rapports → 10 résumés, triés ; 150 avertissements →
-  100 conservés, `quality_warnings_truncated: 50`. (R12)
-- [ ] Un fichier orphelin de `data/raw/prices/` n'est pas exporté. (Définitions)
-- [ ] Aucun flottant ne dépasse les décimales de sa catégorie (NVDA 2010 à ~0,1 $ garde 4 décimales) ; aucun espace hors
-  des chaînes. (R14)
-- [ ] Deux exports sur les mêmes fixtures avec horloge et `git_sha` figés → fichiers identiques (SHA-256). (R15)
-- [ ] Fixture synthétique seedée de 20 tickers × 15 ans : chaque fichier sous sa taille cible, export < 30 s. (R19)
-- [ ] Aucun fichier source modifié (empreintes identiques) et aucun appel réseau (`pytest-socket`). (R1)
+  100 conservés, `quality_warnings_truncated: 50`. (R12) — Preuve : `test_build.py::test_health_missing_file_ticker`, `test_dashboard.py::test_missing_universe_file_skipped`, `test_build.py::test_manifest_skips_symbols_without_prices`, `::test_health_stale_boundary[S-3→false|S-4→true]`, `::test_health_keeps_10_most_recent_runs_sorted`, `::test_health_quality_warnings_truncated_at_100`.
+- [x] Un fichier orphelin de `data/raw/prices/` n'est pas exporté. (Définitions) — Preuve : `test_dashboard.py::test_orphan_price_file_not_read` (orphelin valide et orphelin corrompu ignorés).
+- [x] Aucun flottant ne dépasse les décimales de sa catégorie (NVDA 2010 à ~0,1 $ garde 4 décimales) ; aucun espace hors
+  des chaînes. (R14) — Preuve : `test_build.py::test_rounding_grid` (efficacité vérifiée par mutation : RSI à 4 décimales → échec, T18), `::test_low_priced_ticker_keeps_four_decimals` (cours vers 0,12 $), `::test_every_file_is_minified_utf8`, `::test_render_is_minified_utf8`.
+- [x] Deux exports sur les mêmes fixtures avec horloge et `git_sha` figés → fichiers identiques (SHA-256). (R15) — Preuve : `test_dashboard.py::test_two_exports_identical_bytes` ; réel : deux exports ne diffèrent que par `generated_at` (T24).
+- [x] Fixture synthétique seedée de 20 tickers × 15 ans : chaque fichier sous sa taille cible, export < 30 s. (R19) — Preuve : `test_dashboard.py::test_20_tickers_15_years_sizes_and_duration` (3 770 séances, prix à 4 décimales : `tickers/` ≤ 425,2 Ko, export 1,0 s, T20) ; réel : 4 250 séances, `tickers/` ≤ 412,8 Ko, 4,9 s (T24).
+- [x] Aucun fichier source modifié (empreintes identiques) et aucun appel réseau (`pytest-socket`). (R1) — Preuve : `test_dashboard.py::test_sources_untouched` (SHA-256 de `data/` avant/après) ; `--disable-socket` dans `addopts`, `test_repo_hygiene.py::test_network_is_blocked` ; réel : sources identiques avant/après (T24).
 
 ### M3
 - [ ] Avec portefeuilles, signaux et registre en fixtures : `leaderboard` contient toutes les baselines présentes,
