@@ -18,11 +18,17 @@ from tradinghelper.cli import app
 from tradinghelper.schemas import (
     PRICE_COLUMNS,
     SCHEMA_MODELS,
+    SPARK_LENGTH,
+    ExportSignal,
     IngestTickerResult,
     IngestWarning,
+    OverviewFile,
     PricesFile,
     RunReport,
+    Signal,
     SignalsFile,
+    TickerFile,
+    TickerSeries,
     ValidateRun,
     ValidateViolation,
     ValidateWarning,
@@ -636,3 +642,134 @@ INVALID_SIGNALS: dict[str, dict[str, Any]] = {
 def test_signals_file_rules(data: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         SignalsFile.model_validate(data)
+
+
+# --- Export dashboard : fiche ticker et accueil — contrat §7 (F08 T6) ----------------------------
+
+EXPORT_MANIFEST, EXPORT_TICKER, EXPORT_OVERVIEW, EXPORT_HEALTH = range(4)  # blocs JSON du §7
+
+
+def _ticker_example() -> dict[str, Any]:
+    data: dict[str, Any] = _contract_example("7", EXPORT_TICKER)
+    return data
+
+
+def _overview_example() -> dict[str, Any]:
+    data: dict[str, Any] = _contract_example("7", EXPORT_OVERVIEW)
+    return data
+
+
+def test_ticker_file_contract_example_valid() -> None:
+    ticker = TickerFile.model_validate(_ticker_example())
+
+    assert ticker.series.close == [230.95, 232.4]
+    assert ticker.markers[0].action == "BUY"
+
+
+def test_ticker_series_columns_match_contract() -> None:
+    """R6 : colonnes exportées, sans `adj_close` ni milieu de Bollinger."""
+    assert list(TickerSeries.model_fields) == [
+        "date", "open", "high", "low", "close", "volume",
+        "sma20", "sma50", "sma200", "bb_upper", "bb_lower", "rsi14",
+    ]  # fmt: skip
+
+
+def test_ticker_series_accepts_null_warmup() -> None:
+    data = _ticker_example()
+    data["series"]["sma200"] = [None, None]
+
+    assert TickerFile.model_validate(data).series.sma200 == [None, None]
+
+
+def test_ticker_series_lengths_must_match() -> None:
+    data = _ticker_example()
+    data["series"]["rsi14"] = [61.42]
+
+    with pytest.raises(ValidationError, match="longueur"):
+        TickerFile.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [
+        ("close", float("nan")),
+        ("open", float("inf")),
+        ("sma20", float("nan")),
+        ("rsi14", float("-inf")),
+    ],
+)
+def test_export_floats_reject_nan(column: str, value: float) -> None:
+    """R8, R14 : jamais de NaN ni d'infini dans un fichier d'export."""
+    data = _ticker_example()
+    data["series"][column][0] = value
+
+    with pytest.raises(ValidationError):
+        TickerFile.model_validate(data)
+
+
+def test_overview_change_1d_rejects_nan() -> None:
+    data = _overview_example()
+    data["tickers"][0]["change_1d"] = float("nan")
+
+    with pytest.raises(ValidationError):
+        OverviewFile.model_validate(data)
+
+
+def test_marker_action_buy_or_sell_only() -> None:
+    """R9 : HOLD n'est jamais un marqueur."""
+    data = _ticker_example()
+    data["markers"][0]["action"] = "HOLD"
+
+    with pytest.raises(ValidationError):
+        TickerFile.model_validate(data)
+
+
+def test_ticker_volume_is_non_negative_int() -> None:
+    data = _ticker_example()
+    data["series"]["volume"][0] = -1
+
+    with pytest.raises(ValidationError):
+        TickerFile.model_validate(data)
+
+
+def test_overview_contract_example_valid() -> None:
+    overview = OverviewFile.model_validate(_overview_example())
+
+    assert overview.tickers[0].spark[-1] == 232.4
+    assert overview.leaderboard == []
+    assert overview.latest_signals == []
+    assert overview.kpis.best_strategy_30d is None
+
+
+def test_overview_spark_max_60() -> None:
+    data = _overview_example()
+    data["tickers"][0]["spark"] = [100.0] * (SPARK_LENGTH + 1)
+
+    with pytest.raises(ValidationError):
+        OverviewFile.model_validate(data)
+
+
+def test_overview_m3_rows_typed() -> None:
+    """Sections M3 vides en M1 mais typées (R16) : une ligne de leaderboard et un signal enrichi."""
+    data = _overview_example()
+    data["leaderboard"] = [
+        {"strategy_id": "buy_hold", "kind": "baseline", "equity": 10234.56, "return_30d": 0.0123,
+         "sharpe_oos": 0.9, "random_percentile": 0.55}
+    ]  # fmt: skip
+    signal = dict(
+        _valid_signals()["signals"][0], model_id="lgbm_dir5_20261122_ab12cd", sharpe_oos=1.1
+    )
+    data["latest_signals"] = [signal]
+
+    overview = OverviewFile.model_validate(data)
+
+    assert overview.leaderboard[0].kind == "baseline"
+    assert overview.latest_signals[0].model_id == "lgbm_dir5_20261122_ab12cd"
+
+
+def test_export_signal_extends_signal() -> None:
+    """P8 : un signal exporté est un signal du §4 plus le modèle et sa performance."""
+    assert issubclass(ExportSignal, Signal)
+    assert {"model_id", "sharpe_oos"} <= set(ExportSignal.model_fields)
+    with pytest.raises(ValidationError):  # champs P8 obligatoires (nuls autorisés)
+        ExportSignal.model_validate(_valid_signals()["signals"][0])

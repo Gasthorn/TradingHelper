@@ -53,7 +53,7 @@
   - Fichiers : `src/tradinghelper/schemas.py` (`Action`, `FeatureContribution`, `Signal`, `SignalsFile`), `tests/test_schemas.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T6** Modèles `TickerFile` et `OverviewFile` — R4, R6, R10, R14
+- [x] **T6** Modèles `TickerFile` et `OverviewFile` — R4, R6, R10, R14
   - Tests : `test_schemas.py::test_ticker_file_contract_example_valid` (exemple du §7), `::test_ticker_series_lengths_must_match`,
     `::test_export_floats_reject_nan` (`NaN` et `Infinity` dans une colonne de prix, un indicateur, `change_1d` → refusés),
     `::test_marker_action_buy_or_sell_only` (HOLD refusé), `::test_overview_contract_example_valid`,

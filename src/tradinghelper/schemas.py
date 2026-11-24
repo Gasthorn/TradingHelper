@@ -327,6 +327,113 @@ class SignalsFile(_Contract):
     signals: list[Signal]
 
 
+# --- Export dashboard — `dashboard/public/data/` (contrat §7, F08) ------------------------------
+# Fichiers produits par `th export`, minifiés, jamais commités.
+# Aucun flottant NaN ou infini (R8, R14).
+
+#: Flottant d'export : fini, jamais NaN (une valeur indisponible est `null`).
+Num = Annotated[float, Field(allow_inf_nan=False)]
+
+#: Nombre maximal de clôtures de la sparkline d'accueil (R10).
+SPARK_LENGTH: Final = 60
+
+StrategyKind = Literal["baseline", "model"]
+
+
+class ExportMarker(_Contract):
+    """Signal BUY/SELL affiché sur le graphique d'un ticker (R9) ; les HOLD ne sont pas exportés."""
+
+    date: date
+    strategy_id: str
+    action: Literal["BUY", "SELL"]
+    confidence: UnitFloat
+
+
+class TickerSeries(_Contract):
+    """Colonnes de la fiche ticker (R6), toutes de même longueur ; `null` pendant le warm-up (R8).
+
+    OHLC ajustés des splits (tels que stockés, §2) ; indicateurs calculés sur `close`.
+    """
+
+    date: list[date]
+    open: list[Num]
+    high: list[Num]
+    low: list[Num]
+    close: list[Num]
+    volume: list[NonNegativeInt]
+    sma20: list[Num | None]
+    sma50: list[Num | None]
+    sma200: list[Num | None]
+    bb_upper: list[Num | None]
+    bb_lower: list[Num | None]
+    rsi14: list[Num | None]
+
+    @model_validator(mode="after")
+    def _same_length(self) -> Self:
+        expected = len(self.date)
+        for name in type(self).model_fields:
+            length = len(getattr(self, name))
+            if length != expected:
+                raise ValueError(
+                    f"colonne `{name}` de longueur {length}, "
+                    f"attendu {expected} (longueur de `date`)"
+                )
+        return self
+
+
+class TickerFile(_Contract):
+    """`tickers/{SYMBOL}.json` (R6, R9)."""
+
+    schema_version: Literal[1]
+    symbol: Symbol
+    series: TickerSeries
+    markers: list[ExportMarker]
+
+
+class OverviewTicker(_Contract):
+    """Résumé d'un symbole pour la page d'accueil (R10)."""
+
+    symbol: Symbol
+    last_close: Num
+    change_1d: Num | None  # None s'il n'y a qu'une barre
+    spark: Annotated[list[Num], Field(max_length=SPARK_LENGTH)]
+
+
+class LeaderboardRow(_Contract):
+    """Ligne du classement des stratégies (M3, R16) ; baselines toujours présentes (P3)."""
+
+    strategy_id: str
+    kind: StrategyKind
+    equity: Num
+    return_30d: Num | None
+    sharpe_oos: Num | None
+    random_percentile: Num | None
+
+
+class ExportSignal(Signal):
+    """Signal du §4 enrichi du modèle qui l'a produit et de sa performance historique (M3, P8)."""
+
+    model_id: str | None
+    sharpe_oos: Num | None
+
+
+class Kpis(_Contract):
+    """Indicateurs clés de l'accueil (M3, R16)."""
+
+    best_strategy_30d: str | None
+
+
+class OverviewFile(_Contract):
+    """`overview.json` (R10, R16)."""
+
+    schema_version: Literal[1]
+    data_as_of: date | None
+    tickers: list[OverviewTicker]
+    leaderboard: list[LeaderboardRow]
+    latest_signals: list[ExportSignal]
+    kpis: Kpis
+
+
 # --- Génération des JSON Schemas (`th schemas`) -------------------------------------------------
 
 JSON_SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
