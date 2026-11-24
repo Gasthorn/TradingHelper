@@ -145,6 +145,7 @@
   - Tests : suite complète ; chacun des 14 critères est relié à un test nommé ou à la preuve de T15.
   - Fichiers : `specs/features/F02-data-quality/spec.md` (cases cochées avec leur preuve, statut), `specs/roadmap.md`.
   - Fini quand : 14/14 critères cochés avec preuve ; qualité verte ; CI verte sur la PR.
+  - Avancement (2026-11-24) : 14/14 critères cochés avec preuve dans `spec.md` ; suite locale verte (524 tests, ruff, mypy, `schemas/` synchronisé, build et `check:dist` du dashboard OK). Reste : CI verte sur la PR (branche non poussée), puis validation humaine → ✔️ Done.
 
 ## Couverture exigences → tâches
 | Exigence | Tâches |

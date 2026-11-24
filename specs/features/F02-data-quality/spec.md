@@ -1,6 +1,6 @@
 # F02 — Validation & qualité des données
 
-- **Statut** : 🚧 In progress
+- **Statut** : 🔍 Verifying
 - **Milestone** : M1
 - **Dépend de** : F01
 - **Contrats** : `03-data-contracts.md` §2 (lecture), §6 (section `validate`)
@@ -77,20 +77,20 @@ bloquer le pipeline sur une corruption avérée, signaler sans bloquer une anoma
   (`test_schemas.py::test_generated_schemas_match_committed`, F01 R17) ; F02 n'ajoute rien à ce sujet.
 
 ## Critères d'acceptation
-- [ ] Fixtures « fichier corrompu » (date dupliquée, `high < low`) → code 1, les 2 violations listées avec ticker + date + règle. (R2, R6)
-- [ ] Un cas par règle bloquante (`empty_bars`, `non_session_date`, `after_last_session`, prix `<= 0`, volume `< 0`, `not_rounded`) → code 1. (R2)
-- [ ] JSON invalide, clé manquante, `schema_version: 2`, `MSFT.json` contenant `symbol: "AAPL"` → code 1 (`unreadable`, `schema`, `symbol_mismatch`). (R1)
-- [ ] Saut de +60 % dans la fenêtre récente → avertissement `large_move`, code 0 ; baisse de −30 % → avertissement ; hausse de +35 % → rien. (R3, R6)
-- [ ] Saut de +60 % hors fenêtre récente → aucun avertissement par défaut, avertissement avec `--all-history`. (R3)
-- [ ] 2 séances manquantes consécutives → un seul avertissement `missing_session` (plage) ; un jour férié NYSE, une demi-séance et une introduction en bourse postérieure à `start` ne produisent aucun avertissement. (R3)
-- [ ] Volume nul → `zero_volume` ; dernière date = `S − 3 séances` → pas de `stale`, `S − 4 séances` → `stale` (`now_utc` injecté). (R3)
-- [ ] Symbole de l'univers sans fichier → `missing_file`, code 0 ; dossier de prix absent → code 0. Fichier orphelin périmé → pas de `stale` ; orphelin corrompu → code 1. (R3, R4, R6)
-- [ ] Un fichier `X.json.tmp` et un fichier non JSON dans le dossier sont ignorés. (Définitions)
-- [ ] `--symbols INCONNU` et erreur de config → code 2. (R5, R6)
-- [ ] Aucun fichier de `data/raw/` n'est modifié (empreintes identiques) et aucun appel réseau (`pytest-socket`). (R5)
-- [ ] Rapport existant pour `S` → entrée `validate` ajoutée, section `ingest` intacte, conforme au JSON Schema `run_report`. (R7, R8)
-- [ ] Jour férié sans rapport existant et sans violation → aucun fichier écrit (`git diff` vide). (R7)
-- [ ] En code 1, le rapport contient l'entrée `validate` avec `exit_code: 1`. (R7)
+- [x] Fixtures « fichier corrompu » (date dupliquée, `high < low`) → code 1, les 2 violations listées avec ticker + date + règle. (R2, R6) — Preuve : `test_cli_validate.py::test_corrupted_fixture_exits_1_with_ticker_and_date` (fixture `duplicate_and_high_lt_low.json` : stderr `AAPL 2026-11-20 dates_not_increasing` et `AAPL 2026-11-23 ohlc_inconsistent`, code 1), `test_quality.py::test_multiple_rules_on_same_row`.
+- [x] Un cas par règle bloquante (`empty_bars`, `non_session_date`, `after_last_session`, prix `<= 0`, volume `< 0`, `not_rounded`) → code 1. (R2) — Preuve : `test_quality.py::test_blocking_rule[...]` (13 cas) et `::test_blocking_rule_prices[...]` (10 cas) ; code 1 : `test_validate.py::test_exit_code_reflects_violations` et invariant `exit_code == 1 ⇔ violations` (`test_schemas.py::test_validate_run_rules`).
+- [x] JSON invalide, clé manquante, `schema_version: 2`, `MSFT.json` contenant `symbol: "AAPL"` → code 1 (`unreadable`, `schema`, `symbol_mismatch`). (R1) — Preuve : `test_validate.py::test_invalid_json_is_unreadable`, `::test_missing_key_is_schema_violation`, `::test_schema_version_2_is_schema_violation`, `::test_symbol_mismatch` (fixture `symbol_mismatch/MSFT.json`) ; code 1 via la CLI : `test_cli_validate.py::test_undated_violation_line`.
+- [x] Saut de +60 % dans la fenêtre récente → avertissement `large_move`, code 0 ; baisse de −30 % → avertissement ; hausse de +35 % → rien. (R3, R6) — Preuve : `test_quality.py::test_large_move_thresholds[...]` (+60 %, −30 %, +35 %, +40 % strict, −28,6 %), `test_cli_validate.py::test_jump_fixture_warns_exit_0` (fixture `jump_plus_60.json`, code 0).
+- [x] Saut de +60 % hors fenêtre récente → aucun avertissement par défaut, avertissement avec `--all-history`. (R3) — Preuve : `test_validate.py::test_jump_outside_window_needs_all_history`, `::test_window_vs_all_history`, `test_cli_validate.py::test_all_history_flag`.
+- [x] 2 séances manquantes consécutives → un seul avertissement `missing_session` (plage) ; un jour férié NYSE, une demi-séance et une introduction en bourse postérieure à `start` ne produisent aucun avertissement. (R3) — Preuve : `test_quality.py::test_missing_sessions_grouped_in_ranges`, `::test_holiday_and_half_day_not_missing` (26 et 27/11/2026), `::test_exceptional_closure_not_missing` (09/01/2025), `test_validate.py::test_late_ipo_no_missing_session`.
+- [x] Volume nul → `zero_volume` ; dernière date = `S − 3 séances` → pas de `stale`, `S − 4 séances` → `stale` (`now_utc` injecté). (R3) — Preuve : `test_quality.py::test_zero_volume_warns_each_bar_in_window`, `::test_stale_boundary[S-3→rien|S-4→stale]`, `test_validate.py::test_stale_file_warned`, `::test_zero_volume_in_window` ; `now` injecté via `validate(now=…)` et `cli._now`.
+- [x] Symbole de l'univers sans fichier → `missing_file`, code 0 ; dossier de prix absent → code 0. Fichier orphelin périmé → pas de `stale` ; orphelin corrompu → code 1. (R3, R4, R6) — Preuve : `test_validate.py::test_missing_file_warning`, `::test_no_prices_dir_exit_0`, `::test_orphan_stale_not_warned`, `::test_orphan_corrupted_is_violation`.
+- [x] Un fichier `X.json.tmp` et un fichier non JSON dans le dossier sont ignorés. (Définitions) — Preuve : `test_storage.py::test_price_files_ignores_tmp_hidden_and_non_json` (`.AAPL.json.abc123.tmp`, `.hidden.json`, `notes.txt`, `AAPL.json.bak`, dossier `sub.json`).
+- [x] `--symbols INCONNU` et erreur de config → code 2. (R5, R6) — Preuve : `test_cli_validate.py::test_unknown_symbol_exits_2[...]`, `::test_config_error_exits_2`.
+- [x] Aucun fichier de `data/raw/` n'est modifié (empreintes identiques) et aucun appel réseau (`pytest-socket`). (R5) — Preuve : `test_validate.py::test_raw_files_untouched` (SHA-256 avant/après), `::test_fixture_dir_untouched` ; `--disable-socket` dans `addopts` et `test_repo_hygiene.py::test_network_is_blocked` ; réel : T15, empreintes identiques.
+- [x] Rapport existant pour `S` → entrée `validate` ajoutée, section `ingest` intacte, conforme au JSON Schema `run_report`. (R7, R8) — Preuve : `test_cli_validate.py::test_appends_to_existing_report_keeps_ingest`, `::test_report_matches_json_schema`, `test_storage.py::test_append_validate_keeps_ingest_section` ; réel : T15 (sections `ingest` puis `validate`).
+- [x] Jour férié sans rapport existant et sans violation → aucun fichier écrit (`git diff` vide). (R7) — Preuve : `test_cli_validate.py::test_no_report_written_on_holiday_without_violation` (Thanksgiving, aucun dossier `runs/`).
+- [x] En code 1, le rapport contient l'entrée `validate` avec `exit_code: 1`. (R7) — Preuve : `test_cli_validate.py::test_report_written_with_exit_code_1`, `::test_report_named_after_session` (run à 00:30 UTC → `2026-11-24.json`).
 
 ## Hors périmètre
 - Validation des autres contrats (portefeuilles, signaux, registre) : faite par les features qui les produisent.
