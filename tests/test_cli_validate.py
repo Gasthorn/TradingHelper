@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -31,6 +32,8 @@ S = date(2026, 11, 24)
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "validate"
 CORRUPTED = FIXTURES / "duplicate_and_high_lt_low.json"
 JUMP = FIXTURES / "jump_plus_60.json"
+
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 
 UNIVERSE = {
     "currency": "USD",
@@ -99,9 +102,12 @@ def _fresh_universe(th: _Cli, *symbols: str) -> None:
 def test_validate_listed_in_help(th: _Cli) -> None:
     result = th.runner.invoke(cli.app, ["validate", "--help"])
 
+    # Sur GitHub Actions (et avec FORCE_COLOR), rich colore l'aide : les codes ANSI coupent
+    # `--symbols` en plusieurs segments. On compare le texte sans mise en forme.
+    text = ANSI_ESCAPE.sub("", result.stdout)
     assert result.exit_code == 0
-    assert "--symbols" in result.stdout
-    assert "--all-history" in result.stdout
+    assert "--symbols" in text
+    assert "--all-history" in text
 
 
 @pytest.mark.parametrize(
