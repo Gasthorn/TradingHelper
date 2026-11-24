@@ -1,7 +1,8 @@
 """Contrats de données (source de vérité de `specs/03-data-contracts.md`).
 
 `th schemas` génère les JSON Schemas de `schemas/` depuis ces modèles. Toute modification
-de contrat incrémente `schema_version`.
+de contrat incrémente `schema_version`, sauf l'ajout d'une section ou d'un champ optionnel qui
+laisse valides les fichiers existants (contrats, en-tête).
 """
 
 from __future__ import annotations
@@ -264,13 +265,23 @@ class ValidateRun(_Contract):
 
 class RunReport(BaseModel):
     """Rapport de run d'une séance. Chaque commande met à jour sa seule section ;
-    les sections des autres features (ex. `validate`, F02) sont conservées telles quelles."""
+    les sections des features suivantes (ex. `signal`) sont conservées telles quelles.
 
-    model_config = ConfigDict(extra="allow", frozen=True)
+    Sérialiser avec `by_alias=True` (clé JSON `validate`) et `exclude_unset=True` (une section
+    absente du fichier n'y est pas ajoutée vide).
+    """
+
+    # `validate_by_name` : construction possible par `validate_=` comme par `validate=`.
+    model_config = ConfigDict(
+        extra="allow", frozen=True, validate_by_name=True, validate_by_alias=True
+    )
 
     schema_version: Literal[1]
     session_date: date
     ingest: list[IngestRun] = Field(default_factory=list)
+    # `validate` masquerait la méthode `BaseModel.validate` : champ Python `validate_`,
+    # clé JSON `validate` (F02 R8).
+    validate_: list[ValidateRun] = Field(default_factory=list, alias="validate")
 
 
 # --- Génération des JSON Schemas (`th schemas`) -------------------------------------------------

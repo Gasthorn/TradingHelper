@@ -368,19 +368,52 @@ def test_update_report_appends_ingest_run(tmp_path: Path) -> None:
 
 def test_update_report_preserves_other_sections(tmp_path: Path) -> None:
     target = tmp_path / "2026-11-23.json"
-    validate_section = {"errors": [], "warnings": [{"symbol": "AAPL", "rule": "stale"}]}
+    signal_section = {"errors": [], "warnings": [{"symbol": "AAPL", "rule": "stale"}]}
     target.write_text(
-        json.dumps(
-            {"schema_version": 1, "session_date": "2026-11-23", "validate": validate_section}
-        ),
+        json.dumps({"schema_version": 1, "session_date": "2026-11-23", "signal": signal_section}),
         encoding="utf-8",
     )
 
     update_run_report(target, SESSION, _run())
 
     data = json.loads(target.read_text(encoding="utf-8"))
-    assert data["validate"] == validate_section
+    assert data["signal"] == signal_section
     assert len(data["ingest"]) == 1
+
+
+def test_update_report_preserves_typed_validate_section(tmp_path: Path) -> None:
+    """La section `validate` (F02) est réécrite sous sa clé JSON, jamais sous `validate_`."""
+    target = tmp_path / "2026-11-23.json"
+    validate_run = {
+        "started_at": "2026-11-23T22:33:00Z",
+        "finished_at": "2026-11-23T22:33:01Z",
+        "duration_s": 1.0,
+        "args": {"symbols": None, "all_history": False},
+        "exit_code": 0,
+        "files_checked": 2,
+        "violations": [],
+        "warnings": [],
+    }
+    target.write_text(
+        json.dumps({"schema_version": 1, "session_date": "2026-11-23", "validate": [validate_run]}),
+        encoding="utf-8",
+    )
+
+    update_run_report(target, SESSION, _run())
+
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert "validate_" not in data
+    assert data["validate"] == [validate_run]
+    assert len(data["ingest"]) == 1
+
+
+def test_update_report_does_not_add_empty_validate_section(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    update_run_report(target, SESSION, _run(31))
+
+    update_run_report(target, SESSION, _run(45))
+
+    assert "validate" not in json.loads(target.read_text(encoding="utf-8"))
 
 
 def test_update_report_is_atomic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

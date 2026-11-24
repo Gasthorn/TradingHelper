@@ -18,7 +18,10 @@
   - Fichiers : `src/tradinghelper/schemas.py` (`BlockingRule`, `QualityWarningRule`, `ValidateArgs`, `ValidateViolation`, `ValidateWarning`, `ValidateRun`), `tests/test_schemas.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T2** Section `validate` dans `RunReport` et schéma régénéré — R8, R7
+- [x] **T2** Section `validate` dans `RunReport` et schéma régénéré — R8, R7
+  - Note : la sérialisation `by_alias=True, exclude_unset=True` d'`update_run_report` (prévue en T3) est avancée ici :
+    sans elle, un `ingest` sur un rapport contenant `validate` écrirait une clé `validate_`. Tests
+    `tests/data/test_storage.py::test_update_report_preserves_typed_validate_section`, `::test_update_report_does_not_add_empty_validate_section`.
   - Tests : `tests/test_schemas.py::test_run_report_validate_alias_roundtrip` (JSON `validate` → `validate_` → JSON `validate`, jamais de clé `validate_`), `::test_existing_ingest_only_report_still_valid` (exemple du contrat §6 sans `validate`), `::test_run_report_dump_exclude_unset_omits_validate`, `::test_generated_schemas_match_committed` (existant).
   - Fichiers : `src/tradinghelper/schemas.py` (`RunReport.validate_` avec `alias="validate"`, `validate_by_name=True` ; docstrings mises à jour, dont la règle `schema_version`), `schemas/run_report.schema.json` (régénéré par `uv run th schemas`).
   - Fini quand :

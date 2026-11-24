@@ -206,7 +206,8 @@ def update_run_report(path: Path, session: date, run: IngestRun) -> None:
                 f"séance {existing.session_date.isoformat()} dans le fichier, "
                 f"{session.isoformat()} attendue",
             )
-        current = existing.model_dump(mode="json")
+        # Clé JSON `validate` (alias) ; une section absente du fichier n'y est pas ajoutée.
+        current = existing.model_dump(mode="json", by_alias=True, exclude_unset=True)
 
     ingest = current.get("ingest")
     runs = list(ingest) if isinstance(ingest, list) else []

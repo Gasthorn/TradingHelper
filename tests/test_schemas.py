@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -231,10 +233,10 @@ def test_run_report_without_ingest_section() -> None:
 
 
 def test_run_report_preserves_unknown_sections() -> None:
-    validate_section = {"errors": [], "warnings": [{"symbol": "AAPL", "rule": "stale"}]}
-    report = RunReport.model_validate(_report(validate=validate_section))
+    signal_section = {"errors": [], "warnings": [{"symbol": "AAPL", "rule": "stale"}]}
+    report = RunReport.model_validate(_report(signal=signal_section))
 
-    assert report.model_dump(mode="json")["validate"] == validate_section
+    assert report.model_dump(mode="json")["signal"] == signal_section
 
 
 @pytest.mark.parametrize(
@@ -419,6 +421,58 @@ def test_validate_warning_value_is_optional() -> None:
     )
 
     assert warning.value is None
+
+
+def test_run_report_validate_alias_roundtrip() -> None:
+    report = RunReport.model_validate(_report(validate=[_validate_run()]))
+
+    assert report.validate_[0].files_checked == 3
+    dumped = report.model_dump(mode="json", by_alias=True)
+    assert "validate_" not in dumped
+    assert dumped["validate"][0]["exit_code"] == 1
+    assert RunReport.model_validate(dumped) == report
+    assert "validate_" not in report.model_dump_json(by_alias=True)
+
+
+def test_run_report_validate_section_is_typed() -> None:
+    with pytest.raises(ValidationError):
+        RunReport.model_validate(_report(validate=[_validate_run(exit_code=2)]))
+
+
+def test_existing_ingest_only_report_still_valid() -> None:
+    report = RunReport.model_validate(_report())
+
+    assert report.validate_ == []
+
+
+def test_run_report_dump_exclude_unset_omits_validate() -> None:
+    dumped = RunReport.model_validate(_report()).model_dump(
+        mode="json", by_alias=True, exclude_unset=True
+    )
+
+    assert "validate" not in dumped
+    assert dumped == _report()
+
+
+def test_run_report_defines_validate_without_shadow_warning() -> None:
+    """Le champ Python `validate_` (alias JSON `validate`) ne masque pas `BaseModel.validate`."""
+    # Sous-processus : recharger le module ici changerait l'identité des classes des autres tests.
+    result = subprocess.run(
+        [sys.executable, "-W", "error", "-c", "import tradinghelper.schemas"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_run_report_schema_has_optional_validate_section() -> None:
+    schema = json.loads(render_json_schemas()["run_report.schema.json"])
+
+    assert "validate" in schema["properties"]
+    assert "validate_" not in schema["properties"]
+    assert "validate" not in schema.get("required", [])
 
 
 def test_run_report_requires_schema_version_and_session_date() -> None:
