@@ -81,7 +81,7 @@
 
 ## Orchestration (`data/validate.py`)
 
-- [ ] **T9** Validation d'un fichier — R1, R2, R3
+- [x] **T9** Validation d'un fichier — R1, R2, R3
   - Tests : `tests/data/test_validate.py::test_invalid_json_is_unreadable`, `::test_missing_key_is_schema_violation`, `::test_schema_version_2_is_schema_violation`, `::test_symbol_mismatch` (`MSFT.json` contenant `symbol: "AAPL"`), `::test_safety_net_catches_what_rows_miss` (`check_rows` monkeypatché pour ne rien signaler → violation `schema`), `::test_canonical_fixture_has_no_violation`, `::test_no_warnings_when_violations`, `::test_window_vs_all_history`.
   - Fichiers : `src/tradinghelper/data/validate.py` (`FileResult`, `validate_file`), `tests/data/test_validate.py`, `tests/fixtures/validate/invalid_json.json`, `tests/fixtures/validate/symbol_mismatch/MSFT.json`.
   - Fini quand : tests verts ; qualité verte.
