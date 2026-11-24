@@ -157,18 +157,28 @@ def test_prices_model_is_immutable() -> None:
 # --- Exemples du contrat (le document et les modèles ne doivent pas diverger) -------------------
 
 
-def _contract_example(section: str) -> Any:
-    """Premier bloc ```json de la section `## {section}.` de `03-data-contracts.md`."""
+def _contract_example(section: str, index: int = 0) -> Any:
+    """Bloc ```json n° `index` de la section `## {section}.` de `03-data-contracts.md`."""
     text = CONTRACTS.read_text(encoding="utf-8")
     start = text.index(f"\n## {section}.")
     end = text.find("\n## ", start + 1)
-    block = re.search(r"```json\n(.*?)\n```", text[start : end if end != -1 else None], re.S)
-    assert block is not None, f"pas de bloc JSON dans la section {section}"
-    return json.loads(block.group(1))
+    blocks = re.findall(r"```json\n(.*?)\n```", text[start : end if end != -1 else None], re.S)
+    assert len(blocks) > index, f"pas de bloc JSON n°{index} dans la section {section}"
+    return json.loads(blocks[index])
 
 
 def test_contract_example_prices_is_valid() -> None:
     PricesFile.model_validate(_contract_example("2"))
+
+
+def test_contract_validate_example_is_valid() -> None:
+    """F02 R8 : l'exemple de section `validate` du contrat §6 est accepté par `RunReport`."""
+    report = RunReport.model_validate(_contract_example("6", index=1))
+
+    (run,) = report.validate_
+    assert run.exit_code == 1
+    assert {v.rule for v in run.violations} == {"ohlc_inconsistent"}
+    assert {w.rule for w in run.warnings} == {"missing_session", "large_move", "stale"}
 
 
 def test_contract_example_run_report_is_valid() -> None:

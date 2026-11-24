@@ -243,6 +243,27 @@ def test_docs_list_new_data_modules() -> None:
     assert "bars.py" in architecture
 
 
+def test_readme_documents_validate() -> None:
+    """F02 (T14) : commande `th validate`, options, codes de sortie, rapport conditionnel."""
+    readme = _readme()
+
+    assert "### `th validate`" in readme
+    for expected in ("uv run th validate", "--all-history", "--symbols", "aucun rapport"):
+        assert expected in readme, expected
+    assert "arrivent avec les features F02" not in readme
+
+
+def test_docs_list_validate_modules() -> None:
+    """F02 (plan, décision 1) : `quality.py` pur, `validate.py` à effets de bord, documentés."""
+    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    architecture = (REPO_ROOT / "specs" / "02-architecture.md").read_text(encoding="utf-8")
+
+    assert "data/validate.py" in claude_md
+    assert "data/quality.py" in claude_md
+    assert "uv run th validate" in claude_md
+    assert "quality.py" in architecture
+
+
 def test_readme_mentions_dashboard_url_and_github_settings() -> None:
     readme = _readme()
 

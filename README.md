@@ -39,9 +39,10 @@ La CLI `th` expose une commande par étape du pipeline. Les commandes disponible
 | `uv run th --help` | Liste les commandes. |
 | `uv run th version` | Affiche la version du package (`tradinghelper X.Y.Z`). |
 | `uv run th ingest` | Télécharge les cours journaliers (yfinance) de l'univers et du benchmark. |
+| `uv run th validate` | Vérifie les fichiers de prix (règles bloquantes et avertissements), sans les modifier. |
 | `uv run th schemas` | Régénère les JSON Schemas de `schemas/` depuis `src/tradinghelper/schemas.py`. |
 
-Les étapes suivantes (`th validate`, `th export`…) arrivent avec les features F02 et au-delà.
+Les étapes suivantes (`th export`…) arrivent avec les features F08 et au-delà.
 
 ### `th ingest`
 
@@ -82,6 +83,41 @@ Quand un fichier a été modifié ou qu'un ticker a échoué, `th ingest` ajoute
 
 Le dossier de données est `data/` à la racine du dépôt, ou celui indiqué par la variable
 d'environnement `TH_DATA_DIR`.
+
+### `th validate`
+
+Vérifie chaque fichier de `data/raw/prices/` **sans le modifier** et sans appel réseau, avant que les
+données n'alimentent les modèles.
+
+- **Règles bloquantes** (sur tout l'historique) : fichier illisible ou non conforme au
+  [contrat §2](specs/03-data-contracts.md), symbole différent du nom du fichier, fichier vide, dates non
+  strictement croissantes, date hors séance NYSE ou postérieure à la dernière séance clôturée, prix `<= 0`
+  ou non fini, prix non arrondi à 4 décimales, volume négatif, `low`/`high` incohérents avec `open`/`close`.
+  Toutes les violations sont listées sur stderr, une par ligne : `SYMBOLE DATE règle: détail`.
+- **Avertissements** (n'arrêtent rien) : séances manquantes (regroupées en plages), variation journalière de
+  plus de 40 % (en log-rendement, soit +40 % ou −28,6 %), volume nul, fichier périmé (dernière barre
+  antérieure à 3 séances), symbole de l'univers sans fichier. Les trois premiers ne portent que sur les
+  10 dernières séances, sauf avec `--all-history`.
+- Un fichier dont le symbole n'est plus dans l'univers n'est soumis qu'aux règles bloquantes.
+
+```bash
+uv run th validate                       # run quotidien (après th ingest)
+uv run th validate --symbols AAPL,MSFT   # seulement ces fichiers (les autres sont ignorés)
+uv run th validate --all-history         # avertissements sur tout l'historique (audit)
+```
+
+Codes de sortie :
+
+| Code | Signification |
+|---|---|
+| `0` | Aucune règle bloquante violée (avertissements possibles, ou aucun fichier de prix). |
+| `1` | Au moins une règle bloquante violée : le daily ne commite pas (F10). |
+| `2` | Configuration ou arguments invalides. |
+
+`th validate` ajoute une entrée à la section `validate` du rapport `data/runs/{AAAA-MM-JJ}.json` si ce rapport
+existe déjà (écrit par `th ingest` le même jour) ou s'il y a une violation ; sinon (jour férié, 2e run) il
+n'écrit aucun rapport. Un rapport existant illisible n'est jamais écrasé. Pour réparer un fichier en
+violation : `uv run th ingest --symbols X --full`.
 
 ### Configuration
 

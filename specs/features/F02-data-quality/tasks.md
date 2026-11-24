@@ -114,7 +114,7 @@
 
 ## Documentation et preuve réelle
 
-- [ ] **T14** Documentation — R5, R8
+- [x] **T14** Documentation — R5, R8
   - Tests : `tests/test_schemas.py` (existant) : l'exemple de section `validate` du contrat §6 est accepté par `RunReport` (à ajouter au test qui lit `03-data-contracts.md`, s'il en existe un ; sinon `::test_contract_validate_example_is_valid`).
   - Fichiers :
     - `specs/03-data-contracts.md` (§6 : exemple de section `validate`) ;
