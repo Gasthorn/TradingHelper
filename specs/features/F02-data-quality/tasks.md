@@ -123,7 +123,7 @@
     - `README.md` (section `th validate`, codes de sortie, `--all-history` ; suppression de « arrivent avec F02 »).
   - Fini quand : test vert ; la doc décrit les options, les codes de sortie et la condition d'écriture du rapport.
 
-- [ ] **T15** Smoke test manuel sur données réelles — R2, R3, R6
+- [x] **T15** Smoke test manuel sur données réelles — R2, R3, R6
   - Tests : aucun test automatisé (réseau). Dans un dossier temporaire (`TH_DATA_DIR`) :
     - `uv run th ingest --symbols AAPL,SPY` ;
     - `uv run th validate --symbols AAPL,SPY --all-history` ;
@@ -133,6 +133,13 @@
     - les deux validations sortent en 0, sans violation ;
     - les avertissements `--all-history` sont relevés et expliqués (aucun `missing_session` attendu, cf. preuve de F01 T19) ;
     - le dossier temporaire est supprimé, rien n'est ajouté à `data/` dans le dépôt.
+  - Preuve (2026-11-24, 21:51 UTC, `TH_DATA_DIR` dans un dossier temporaire) :
+    - `th ingest --symbols AAPL,SPY` : « Séance 2026-11-24 : 2 mis à jour », code 0 ; 4 250 barres chacun, du 2010-01-04 au 2026-11-24 ; rapport `runs/2026-11-24.json` créé ;
+    - `th validate --symbols AAPL,SPY --all-history` puis sans l'option : « 2 fichier(s) vérifié(s), 0 violation(s), 0 avertissement(s) », code 0 ; deux entrées ajoutées à la section `validate` du rapport, après `ingest` ;
+    - 0 avertissement sur tout l'historique, cohérent : aucune séance manquante (comme F01 T19), aucun mouvement journalier d'AAPL ou de SPY au-delà de +40 % / −28,6 % depuis 2010, aucun volume nul, données à jour ;
+    - empreintes SHA-256 des deux fichiers de prix identiques avant et après validation (lecture seule) ;
+    - contre-épreuve : `high` mis à 1.0 au 2026-11-20 dans la copie d'AAPL → `AAPL 2026-11-20 ohlc_inconsistent: …` sur stderr, code 1 ;
+    - dossier temporaire supprimé, `git status` propre, pas de dossier `data/` dans le dépôt.
 
 - [ ] **T_final** Vérification : tous les critères d'acceptation de la spec (→ `/spec-verify F02`) — R1–R8
   - Tests : suite complète ; chacun des 14 critères est relié à un test nommé ou à la preuve de T15.
