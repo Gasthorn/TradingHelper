@@ -13,7 +13,14 @@ import pytest
 from synthetic import write_synthetic_prices
 from tradinghelper.config import UniverseConfig
 from tradinghelper.data.calendar import NyseCalendar
-from tradinghelper.export.dashboard import ExportSourceError, read_sources
+from tradinghelper.export import dashboard
+from tradinghelper.export.dashboard import (
+    ExportSourceError,
+    ExportTargetError,
+    check_target,
+    read_sources,
+    replace_dir,
+)
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "export"
 CAL = NyseCalendar()
@@ -179,3 +186,169 @@ def test_invalid_sources_all_listed(tmp_path: Path) -> None:
     ]
     assert all(problem.reason for problem in excinfo.value.problems)
     assert "MSFT.json" in str(excinfo.value)
+
+
+# --- Garde-fou sur `--out` et remplacement du dossier (T16) -------------------------------------
+
+
+@pytest.fixture
+def layout(tmp_path: Path) -> dict[str, Path]:
+    """Arborescence type : dépôt contenant `data/` et `dashboard/public/data/`."""
+    repo = tmp_path / "repo"
+    data = repo / "data"
+    (data / "raw" / "prices").mkdir(parents=True)
+    (repo / "dashboard" / "public").mkdir(parents=True)
+    return {"repo": repo, "data": data, "out": repo / "dashboard" / "public" / "data"}
+
+
+def _check(out: Path, layout: dict[str, Path]) -> None:
+    check_target(out, data_root=layout["data"], repo_root=layout["repo"])
+
+
+@pytest.mark.parametrize(
+    "target",
+    ["repo_root", "parent_of_repo", "data_root", "inside_data_root", "parent_of_data_root",
+     "non_empty_without_manifest", "existing_file"],
+)  # fmt: skip
+def test_check_target_refuses(layout: dict[str, Path], target: str) -> None:
+    """Décision 2 du plan : jamais de suppression d'un dossier qui n'est pas un export."""
+    repo, data = layout["repo"], layout["data"]
+    other = repo / "other"
+    other.mkdir()
+    (other / "notes.txt").write_text("à garder", encoding="utf-8")
+    (repo / "file.json").write_text("{}", encoding="utf-8")
+    out = {
+        "repo_root": repo,
+        "parent_of_repo": repo.parent,
+        "data_root": data,
+        "inside_data_root": data / "raw",
+        "parent_of_data_root": data.parent,
+        "non_empty_without_manifest": other,
+        "existing_file": repo / "file.json",
+    }[target]
+
+    with pytest.raises(ExportTargetError):
+        _check(out, layout)
+
+
+def test_check_target_refuses_relative_alias_of_repo(
+    layout: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(layout["repo"] / "dashboard")
+
+    with pytest.raises(ExportTargetError):
+        _check(Path(".."), layout)
+
+
+@pytest.mark.parametrize("state", ["missing_dir", "empty_dir", "previous_export"])
+def test_check_target_accepts(layout: dict[str, Path], state: str) -> None:
+    out = layout["out"]
+    if state != "missing_dir":
+        out.mkdir()
+    if state == "previous_export":
+        (out / "manifest.json").write_text("{}", encoding="utf-8")
+        (out / "tickers").mkdir()
+
+    _check(out, layout)
+
+
+FILES = {
+    "manifest.json": b'{"m":1}',
+    "overview.json": b'{"o":1}',
+    "tickers/AAPL.json": b'{"t":"AAPL"}',
+    "tickers/BRK.B.json": b'{"t":"BRK.B"}',
+}
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _siblings(out: Path) -> list[str]:
+    return sorted(path.name for path in out.parent.iterdir())
+
+
+def test_replace_dir_creates_parent_and_subdirs(tmp_path: Path) -> None:
+    out = tmp_path / "a" / "b" / "data"
+
+    replace_dir(out, FILES)
+
+    assert _tree(out) == FILES
+    assert _siblings(out) == ["data"]  # aucun dossier temporaire restant
+
+
+def test_replace_dir_removes_stale_files(tmp_path: Path) -> None:
+    """R2 : aucun fichier d'un export précédent ne subsiste."""
+    out = tmp_path / "data"
+    replace_dir(out, {**FILES, "tickers/OLD.json": b"{}", "obsolete.json": b"{}"})
+
+    replace_dir(out, FILES)
+
+    assert _tree(out) == FILES
+    assert _siblings(out) == ["data"]
+
+
+def test_failure_during_write_keeps_previous_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out = tmp_path / "data"
+    replace_dir(out, {"manifest.json": b"ancien"})
+    calls = {"n": 0}
+    original = dashboard._write_file
+
+    def failing(path: Path, content: bytes) -> None:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            raise OSError("disque plein")
+        original(path, content)
+
+    monkeypatch.setattr(dashboard, "_write_file", failing)
+
+    with pytest.raises(OSError, match="disque plein"):
+        replace_dir(out, FILES)
+
+    assert _tree(out) == {"manifest.json": b"ancien"}
+    assert _siblings(out) == ["data"]
+
+
+def test_no_temp_dir_left_after_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    out = tmp_path / "data"
+
+    def failing(path: Path, content: bytes) -> None:
+        raise OSError("refusé")
+
+    monkeypatch.setattr(dashboard, "_write_file", failing)
+
+    with pytest.raises(OSError, match="refusé"):
+        replace_dir(out, FILES)
+
+    assert not out.exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_failure_after_move_restores_previous_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Le renommage final échoue alors que l'ancien export a déjà été déplacé : il est restauré."""
+    out = tmp_path / "data"
+    replace_dir(out, {"manifest.json": b"ancien"})
+    original = dashboard._move
+    calls = {"n": 0}
+
+    def failing(src: Path, dst: Path) -> None:
+        calls["n"] += 1
+        if calls["n"] == 2:  # 1 : ancien → sauvegarde ; 2 : temporaire → out
+            raise PermissionError("dossier ouvert ailleurs")
+        original(src, dst)
+
+    monkeypatch.setattr(dashboard, "_move", failing)
+
+    with pytest.raises(PermissionError):
+        replace_dir(out, FILES)
+
+    assert _tree(out) == {"manifest.json": b"ancien"}
+    assert _siblings(out) == ["data"]

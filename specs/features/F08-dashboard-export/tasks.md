@@ -144,7 +144,7 @@
     fixtures, `tests/export/test_dashboard.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T16** Garde-fou sur `--out` et remplacement du dossier — R2, R3
+- [x] **T16** Garde-fou sur `--out` et remplacement du dossier — R2, R3
   - Tests : `test_dashboard.py::test_check_target_refuses[repo_root|parent_of_repo|data_root|parent_of_data_root|non_empty_without_manifest]`,
     `::test_check_target_accepts[missing_dir|empty_dir|previous_export]`, `::test_replace_dir_removes_stale_files`,
     `::test_replace_dir_creates_parent_and_subdirs` (`tickers/`), `::test_failure_during_write_keeps_previous_export`

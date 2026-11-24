@@ -6,7 +6,12 @@ Effets de bord fichiers isolés ici (CLAUDE.md) ; la construction des fichiers e
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import tempfile
+import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -16,7 +21,13 @@ from pydantic import BaseModel, ValidationError
 
 from tradinghelper.config import UniverseConfig, universe_targets
 from tradinghelper.data.storage import PricesFileError, prices_path, read_json, read_prices
-from tradinghelper.schemas import HEALTH_RUNS, PricesFile, RunReport, SignalsFile
+from tradinghelper.schemas import (
+    HEALTH_RUNS,
+    MANIFEST_NAME,
+    PricesFile,
+    RunReport,
+    SignalsFile,
+)
 
 #: Fichier daté `YYYY-MM-DD.json` (rapports de run, signaux) ; `latest.json` n'en est pas un.
 _DATED_FILE: Final = re.compile(r"^(\d{4}-\d{2}-\d{2})\.json$")
@@ -145,3 +156,63 @@ def read_sources(universe: UniverseConfig, data_root: Path) -> Sources:
     if problems:
         raise ExportSourceError(problems)
     return Sources(prices=prices, reports=reports, signals=signals)
+
+
+# --- Dossier de sortie (R2) --------------------------------------------------------------------
+
+
+class ExportTargetError(Exception):
+    """Dossier de sortie refusé (code 2, erreur d'arguments) : il serait supprimé par la
+    reconstruction alors qu'il n'est pas un export (décision 2 du plan)."""
+
+
+def check_target(out: Path, *, data_root: Path, repo_root: Path) -> None:
+    """Refuse un `--out` dont le remplacement détruirait autre chose qu'un export précédent :
+    racine du dépôt ou l'un de ses parents, dossier de données (ou dedans, ou au-dessus),
+    fichier, ou dossier non vide sans `manifest.json`."""
+    target = out.resolve()
+    repo = repo_root.resolve()
+    data = data_root.resolve()
+    if repo.is_relative_to(target):
+        raise ExportTargetError(f"{out} : racine du dépôt ou l'un de ses parents")
+    if data.is_relative_to(target) or target.is_relative_to(data):
+        raise ExportTargetError(f"{out} : recouvre le dossier de données {data_root}")
+    if target.is_file():
+        raise ExportTargetError(f"{out} : c'est un fichier")
+    if target.is_dir() and any(target.iterdir()) and not (target / MANIFEST_NAME).is_file():
+        raise ExportTargetError(f"{out} : dossier non vide sans {MANIFEST_NAME} (pas un export)")
+
+
+def _write_file(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+
+
+def _move(src: Path, dst: Path) -> None:
+    os.replace(src, dst)
+
+
+def replace_dir(out: Path, files: Mapping[str, bytes]) -> None:
+    """Écrit `files` (chemins relatifs, séparateur `/`) dans un dossier temporaire voisin, puis
+    remplace `out` par ce dossier (R2) : aucun fichier d'un export précédent ne subsiste.
+
+    En cas d'échec, `out` reste dans son état antérieur (restauré s'il avait déjà été déplacé)
+    et aucun dossier temporaire ne reste ; l'exception est propagée.
+    """
+    out.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(dir=out.parent, prefix=f".{out.name}.new-"))
+    backup: Path | None = None
+    try:
+        for relative, content in files.items():
+            _write_file(staging.joinpath(*relative.split("/")), content)
+        if out.exists():
+            backup = out.parent / f".{out.name}.old-{uuid.uuid4().hex}"
+            _move(out, backup)
+        _move(staging, out)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        if backup is not None and backup.exists() and not out.exists():
+            _move(backup, out)
+        raise
+    if backup is not None:
+        shutil.rmtree(backup, ignore_errors=True)
