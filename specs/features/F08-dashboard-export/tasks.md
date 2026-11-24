@@ -115,7 +115,7 @@
   - Fichiers : `src/tradinghelper/export/build.py` (`build_health`, réutilise `quality.STALE_SESSIONS`), `tests/export/test_build.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T13** Manifest — R11
+- [x] **T13** Manifest — R11
   - Tests : `test_build.py::test_manifest_hashes_match_files`, `::test_manifest_excludes_itself`, `::test_manifest_files_sorted`,
     `::test_manifest_tickers_order_and_dates` (ordre de `universe_targets`, première et dernière date),
     `::test_benchmark_meta_name_symbol_sector_null`, `::test_benchmark_also_in_universe_keeps_name`,

@@ -12,18 +12,21 @@ import math
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
-from datetime import date, timedelta
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from typing import Final
 
 import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel
 
+from tradinghelper.config import UniverseConfig, universe_targets
 from tradinghelper.data.calendar import NyseCalendar
 from tradinghelper.data.quality import STALE_SESSIONS
 from tradinghelper.features.indicators import bollinger, rsi_wilder, sma
 from tradinghelper.schemas import (
     HEALTH_RUNS,
+    MANIFEST_NAME,
     MAX_QUALITY_WARNINGS,
     SPARK_LENGTH,
     ExportMarker,
@@ -34,6 +37,9 @@ from tradinghelper.schemas import (
     HealthValidate,
     IngestRun,
     Kpis,
+    ManifestEntry,
+    ManifestFile,
+    ManifestTicker,
     OverviewFile,
     OverviewTicker,
     PricesFile,
@@ -229,4 +235,83 @@ def build_health(
         runs=runs,
         quality_warnings=warnings[:MAX_QUALITY_WARNINGS],
         quality_warnings_truncated=max(0, len(warnings) - MAX_QUALITY_WARNINGS),
+    )
+
+
+# --- Manifest (R11) ----------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SymbolMeta:
+    """Métadonnées d'affichage d'une cible.
+
+    Benchmark hors univers : nom = symbole, secteur `None`.
+    """
+
+    symbol: str
+    name: str
+    sector: str | None
+    benchmark: bool
+
+
+def symbol_metas(universe: UniverseConfig) -> list[SymbolMeta]:
+    """Métadonnées des cibles, dans l'ordre de `universe_targets` (tickers puis benchmark)."""
+    by_symbol = {ticker.symbol: ticker for ticker in universe.tickers}
+    metas: list[SymbolMeta] = []
+    for symbol, _start in universe_targets(universe):
+        ticker = by_symbol.get(symbol)
+        metas.append(
+            SymbolMeta(
+                symbol=symbol,
+                name=ticker.name if ticker is not None else symbol,
+                sector=ticker.sector if ticker is not None else None,
+                benchmark=symbol == universe.benchmark,
+            )
+        )
+    return metas
+
+
+def build_manifest(
+    universe: UniverseConfig,
+    prices: Mapping[str, PricesFile],
+    files: Mapping[str, bytes],
+    *,
+    generated_at: datetime,
+    git_sha: str | None,
+    data_as_of: date | None,
+) -> ManifestFile:
+    """`manifest.json` (R11) : symboles exportés (ordre des cibles, dates des barres) et
+    empreinte de chaque autre fichier produit, triés par chemin. Stratégies vides en M1."""
+    if MANIFEST_NAME in files:
+        raise ValueError(f"`{MANIFEST_NAME}` ne peut pas figurer dans sa propre liste")
+    tickers = []
+    for meta in symbol_metas(universe):
+        file = prices.get(meta.symbol)
+        if file is None:
+            continue
+        if not file.bars:
+            raise ValueError(f"{meta.symbol} : aucune barre à exporter")
+        tickers.append(
+            ManifestTicker(
+                symbol=meta.symbol,
+                name=meta.name,
+                sector=meta.sector,
+                benchmark=meta.benchmark,
+                first_date=file.bars[0][0],
+                last_date=file.bars[-1][0],
+            )
+        )
+    return ManifestFile(
+        schema_version=1,
+        generated_at=generated_at,
+        data_as_of=data_as_of,
+        git_sha=git_sha,
+        currency=universe.currency,
+        benchmark=universe.benchmark,
+        tickers=tickers,
+        strategies=[],
+        files=[
+            ManifestEntry(path=path, sha256=digest(content), bytes=len(content))
+            for path, content in sorted(files.items())
+        ],
     )

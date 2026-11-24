@@ -5,20 +5,23 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 import numpy as np
 import pytest
 from pydantic import BaseModel
 
+from tradinghelper.config import UniverseConfig
 from tradinghelper.data.calendar import NyseCalendar
 from tradinghelper.export.build import (
     MONEY_DECIMALS,
     PRICE_DECIMALS,
     RATIO_DECIMALS,
     RSI_DECIMALS,
+    SymbolMeta,
     build_health,
+    build_manifest,
     build_overview,
     build_ticker,
     collect_markers,
@@ -26,6 +29,7 @@ from tradinghelper.export.build import (
     digest,
     render,
     rounded,
+    symbol_metas,
 )
 from tradinghelper.features.indicators import bollinger, rsi_wilder, sma
 from tradinghelper.schemas import (
@@ -37,6 +41,7 @@ from tradinghelper.schemas import (
     HealthFile,
     HealthRun,
     HealthValidate,
+    ManifestFile,
     PricesFile,
     RunReport,
     SignalsFile,
@@ -574,3 +579,141 @@ def test_health_without_reports() -> None:
     assert health.runs == []
     assert health.quality_warnings == []
     assert health.quality_warnings_truncated == 0
+
+
+# --- Manifest (T13) -----------------------------------------------------------------------------
+
+GENERATED_AT = datetime(2026, 11, 24, 22, 50, 12, tzinfo=UTC)
+SHA = "430115d4c1f0e2b3a49587c6d1e0f2a3b4c5d6e7"
+
+
+def _universe(benchmark: str = "SPY") -> UniverseConfig:
+    return UniverseConfig.model_validate(
+        {
+            "currency": "USD",
+            "benchmark": benchmark,
+            "tickers": [
+                {"symbol": "MSFT", "name": "Microsoft", "sector": "Tech", "start": "2010-01-01"},
+                {"symbol": "AAPL", "name": "Apple Inc.", "sector": "Tech", "start": "2010-01-01"},
+            ],
+        }
+    )
+
+
+def _all_prices() -> dict[str, PricesFile]:
+    return {
+        "MSFT": _prices(_closes(3), symbol="MSFT", first=date(2026, 1, 5)),
+        "AAPL": _prices(_closes(4), symbol="AAPL"),
+        "SPY": _prices(_closes(2), symbol="SPY"),
+    }
+
+
+FILES = {
+    "tickers/AAPL.json": b'{"a":1}',
+    "health.json": b'{"h":2}',
+    "overview.json": b"{}",
+}
+
+
+def _manifest(
+    universe: UniverseConfig | None = None,
+    prices: dict[str, PricesFile] | None = None,
+    files: dict[str, bytes] | None = None,
+) -> ManifestFile:
+    return build_manifest(
+        universe or _universe(),
+        _all_prices() if prices is None else prices,
+        FILES if files is None else files,
+        generated_at=GENERATED_AT,
+        git_sha=SHA,
+        data_as_of=date(2026, 1, 5),
+    )
+
+
+def test_manifest_hashes_match_files() -> None:
+    manifest = _manifest()
+
+    for entry in manifest.files:
+        assert entry.sha256 == digest(FILES[entry.path])
+        assert entry.bytes == len(FILES[entry.path])
+
+
+def test_manifest_files_sorted() -> None:
+    paths = [entry.path for entry in _manifest().files]
+
+    assert paths == ["health.json", "overview.json", "tickers/AAPL.json"]
+
+
+def test_manifest_excludes_itself() -> None:
+    """Le manifest ne figure pas dans sa propre liste (R11)."""
+    with pytest.raises(ValueError, match="manifest"):
+        _manifest(files={**FILES, "manifest.json": b"{}"})
+
+
+def test_manifest_tickers_order_and_dates() -> None:
+    """Ordre de `universe_targets` (tickers puis benchmark), dates des barres."""
+    prices = _all_prices()
+
+    tickers = _manifest(prices=prices).tickers
+
+    assert [t.symbol for t in tickers] == ["MSFT", "AAPL", "SPY"]
+    for ticker in tickers:
+        bars = prices[ticker.symbol].bars
+        assert (ticker.first_date, ticker.last_date) == (bars[0][0], bars[-1][0])
+
+
+def test_manifest_skips_symbols_without_prices() -> None:
+    prices = _all_prices()
+    del prices["MSFT"]
+
+    assert [t.symbol for t in _manifest(prices=prices).tickers] == ["AAPL", "SPY"]
+
+
+def test_benchmark_meta_name_symbol_sector_null() -> None:
+    spy = _manifest().tickers[-1]
+
+    assert (spy.symbol, spy.name, spy.sector, spy.benchmark) == ("SPY", "SPY", None, True)
+    assert all(not t.benchmark for t in _manifest().tickers[:-1])
+
+
+def test_benchmark_also_in_universe_keeps_name() -> None:
+    universe = _universe(benchmark="AAPL")
+    prices = _all_prices()
+    del prices["SPY"]
+
+    tickers = _manifest(universe=universe, prices=prices).tickers
+
+    aapl = next(t for t in tickers if t.symbol == "AAPL")
+    assert (aapl.name, aapl.sector, aapl.benchmark) == ("Apple Inc.", "Tech", True)
+    assert len(tickers) == 2
+
+
+def test_symbol_metas_follow_universe_targets() -> None:
+    metas = symbol_metas(_universe())
+
+    assert metas == [
+        SymbolMeta("MSFT", "Microsoft", "Tech", benchmark=False),
+        SymbolMeta("AAPL", "Apple Inc.", "Tech", benchmark=False),
+        SymbolMeta("SPY", "SPY", None, benchmark=True),
+    ]
+
+
+def test_manifest_strategies_empty_in_m1() -> None:
+    assert _manifest().strategies == []
+
+
+def test_manifest_generated_at_and_git_sha_passthrough() -> None:
+    manifest = _manifest()
+
+    assert manifest.generated_at == GENERATED_AT
+    assert manifest.git_sha == SHA
+    assert manifest.data_as_of == date(2026, 1, 5)
+    assert (manifest.currency, manifest.benchmark) == ("USD", "SPY")
+
+
+def test_manifest_without_git_sha() -> None:
+    manifest = build_manifest(
+        _universe(), {}, {}, generated_at=GENERATED_AT, git_sha=None, data_as_of=None
+    )
+
+    assert (manifest.git_sha, manifest.tickers, manifest.files) == (None, [], [])
