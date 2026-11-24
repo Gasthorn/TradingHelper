@@ -6,6 +6,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import time
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -554,3 +555,66 @@ def test_git_sha_null_when_git_missing(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(dashboard.subprocess, "run", missing)
 
     assert resolve_git_sha({}, tmp_path) is None
+
+
+# --- Taille et durée pour 20 tickers sur 15 ans (T20) -------------------------------------------
+
+#: Tailles cibles du contrat §7 (octets) ; `tickers/` s'applique à chaque fichier.
+SIZE_TARGETS = {
+    "manifest.json": 10 * 1024,
+    "overview.json": 100 * 1024,
+    "health.json": 20 * 1024,
+    "tickers/": 500 * 1024,
+}
+MAX_EXPORT_SECONDS = 30.0
+
+
+def _target_for(path: str) -> int:
+    return SIZE_TARGETS["tickers/"] if path.startswith("tickers/") else SIZE_TARGETS[path]
+
+
+def test_20_tickers_15_years_sizes_and_duration(tmp_path: Path) -> None:
+    """R19 : 20 tickers + SPY sur ≈ 3 780 séances, prix à 4 décimales (pire cas) : chaque
+    fichier sous sa taille cible et export en moins de 30 s."""
+    symbols = [f"T{i:02d}" for i in range(20)]
+    universe = UniverseConfig.model_validate(
+        {
+            "currency": "USD",
+            "benchmark": "SPY",
+            "tickers": [
+                {
+                    "symbol": s,
+                    "name": f"Société {s}",
+                    "sector": "Industrials",
+                    "start": "2011-01-01",
+                }
+                for s in symbols
+            ],
+        }
+    )
+    data = tmp_path / "repo" / "data"
+    sessions = CAL.sessions(date(2011, 11, 25), date(2026, 11, 23))
+    write_synthetic_prices(
+        _prices_dir(data), [*symbols, "SPY"], sessions, np.random.default_rng(15)
+    )
+    _copy_fixture_dir("runs", data)
+    _copy_fixture_dir("signals", data)
+    out = tmp_path / "repo" / "dashboard" / "public" / "data"
+
+    started = time.perf_counter()
+    outcome = export(
+        universe,
+        data_root=data,
+        out=out,
+        repo_root=tmp_path / "repo",
+        calendar=CAL,
+        now=lambda: NOW,
+        git_sha=SHA,
+    )
+    elapsed = time.perf_counter() - started
+
+    assert len(sessions) > 3_700
+    assert len(outcome.sizes) == 21 + 3
+    over = {path: size for path, size in outcome.sizes.items() if size >= _target_for(path)}
+    assert over == {}, f"tailles cibles dépassées : {over}"
+    assert elapsed < MAX_EXPORT_SECONDS, f"{elapsed:.1f} s"

@@ -183,7 +183,7 @@
   - Fichiers : `src/tradinghelper/cli.py` (commande `export`, point d'injection `_git_sha`), `tests/test_cli_export.py`.
   - Fini quand : tests verts ; `uv run th export --help` documente `--out` et les codes de sortie ; qualité verte.
 
-- [ ] **T20** Taille et durée pour 20 tickers × 15 ans — R19
+- [x] **T20** Taille et durée pour 20 tickers × 15 ans — R19
   - Tests : `test_dashboard.py::test_20_tickers_15_years_sizes_and_duration` (générateur de T14, 20 tickers + SPY ×
     ≈ 3 780 séances ; `manifest` < 10 Ko, `overview` < 100 Ko, chaque `tickers/*` < 500 Ko, `health` < 20 Ko ;
     durée de `export()` < 30 s).
