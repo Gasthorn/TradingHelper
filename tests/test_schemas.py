@@ -11,9 +11,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
+from synthetic import sample_export_files
 from tradinghelper.cli import app
 from tradinghelper.schemas import (
     HEALTH_RUNS,
@@ -988,3 +990,37 @@ def test_health_runs_sorted_by_session_desc() -> None:
 
     with pytest.raises(ValidationError, match="décroissant"):
         HealthFile.model_validate(data)
+
+
+# --- Sorties de l'export validées par les JSON Schemas (F08 T18) ---------------------------------
+
+
+def _schema_for(path: str) -> str:
+    if path.startswith("tickers/"):
+        return "export_ticker.schema.json"
+    return f"export_{path.removesuffix('.json')}.schema.json"
+
+
+def test_export_outputs_match_json_schemas() -> None:
+    """R1, R4 : chaque fichier produit est valide pour son JSON Schema (Draft 2020-12) de
+    `schemas/`, en plus de son modèle pydantic (validé à la construction)."""
+    files = sample_export_files()
+
+    assert sorted({_schema_for(path) for path in files}) == [
+        "export_health.schema.json", "export_manifest.schema.json",
+        "export_overview.schema.json", "export_ticker.schema.json",
+    ]  # fmt: skip
+    for path, content in files.items():
+        schema = json.loads((REPO_ROOT / "schemas" / _schema_for(path)).read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
+        errors = list(Draft202012Validator(schema).iter_errors(json.loads(content)))
+        assert errors == [], f"{path} : {errors[0].message}"
+
+
+def test_json_schema_detects_contract_violation() -> None:
+    """Garde-fou : le validateur détecte bien un fichier hors contrat (colonne manquante)."""
+    ticker = json.loads(sample_export_files()["tickers/AAPL.json"])
+    del ticker["series"]["rsi14"]
+    schema = json.loads((REPO_ROOT / "schemas" / "export_ticker.schema.json").read_text("utf-8"))
+
+    assert list(Draft202012Validator(schema).iter_errors(ticker))

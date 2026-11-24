@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from collections.abc import Iterator
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -12,6 +13,7 @@ import numpy as np
 import pytest
 from pydantic import BaseModel
 
+from synthetic import sample_export_files
 from tradinghelper.config import UniverseConfig
 from tradinghelper.data.calendar import NyseCalendar
 from tradinghelper.export.build import (
@@ -717,3 +719,52 @@ def test_manifest_without_git_sha() -> None:
     )
 
     assert (manifest.git_sha, manifest.tickers, manifest.files) == (None, [], [])
+
+
+# --- Grille d'arrondi sur un export complet (T18) ------------------------------------------------
+
+#: Clés dont les flottants ont 2 décimales ; tous les autres flottants d'un export M1 en ont 4
+#: (prix, indicateurs de prix, ratios, confiances ; aucun montant monétaire avant M3).
+TWO_DECIMAL_KEYS = frozenset({"rsi14"})
+
+
+def _floats(node: Any, key: str = "") -> Iterator[tuple[str, float]]:
+    """(clé parente, valeur) pour chaque flottant d'un document JSON."""
+    if isinstance(node, dict):
+        for child_key, child in node.items():
+            yield from _floats(child, child_key)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _floats(item, key)
+    elif isinstance(node, float):
+        yield key, node
+
+
+def test_rounding_grid() -> None:
+    """R14 : chaque flottant respecte les décimales de sa catégorie."""
+    for path, content in sample_export_files().items():
+        for key, value in _floats(json.loads(content)):
+            decimals = 2 if key in TWO_DECIMAL_KEYS else 4
+            assert round(value, decimals) == value, f"{path} : {key} = {value}"
+
+
+def test_low_priced_ticker_keeps_four_decimals() -> None:
+    """Un cours ancien ajusté des splits vers 0,1 $ (NVDA 2010) n'est pas écrasé à 2 décimales."""
+    nvda = json.loads(sample_export_files()["tickers/NVDA.json"])["series"]
+
+    values = nvda["close"] + [v for v in nvda["sma20"] if v is not None]
+    assert max(values) < 1.0
+    assert any(round(v, 2) != v for v in values)
+    assert all(round(v, 4) == v for v in values)
+
+
+def test_schema_version_in_every_file() -> None:
+    for path, content in sample_export_files().items():
+        assert json.loads(content)["schema_version"] == 1, path
+
+
+def test_every_file_is_minified_utf8() -> None:
+    for path, content in sample_export_files().items():
+        text = content.decode("utf-8")
+        assert "\n" not in text, path
+        assert json.dumps(json.loads(text), separators=(",", ":"), ensure_ascii=False) == text

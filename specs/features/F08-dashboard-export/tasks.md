@@ -164,7 +164,7 @@
     `tests/export/test_dashboard.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T18** [P] Validation des sorties par les JSON Schemas — R1, R4, R14
+- [x] **T18** [P] Validation des sorties par les JSON Schemas — R1, R4, R14
   - Tests : `tests/test_schemas.py::test_export_outputs_match_json_schemas` (`jsonschema`, Draft 2020-12, chaque fichier
     d'un export de fixtures validé par son schéma de `schemas/`), `tests/export/test_build.py::test_rounding_grid`
     (parcours de chaque fichier produit : décimales par catégorie ; une série NVDA 2010 à ~0,1 $ garde 4 décimales),

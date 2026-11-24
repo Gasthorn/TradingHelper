@@ -13,18 +13,28 @@ from pathlib import Path
 
 import numpy as np
 
+from tradinghelper.config import UniverseConfig
+from tradinghelper.data.calendar import NyseCalendar
 from tradinghelper.data.storage import dumps_prices
-from tradinghelper.schemas import PRICE_COLUMNS, Bar, PricesFile
+from tradinghelper.export.dashboard import Sources, render_files
+from tradinghelper.schemas import PRICE_COLUMNS, Bar, PricesFile, RunReport, SignalsFile
 
 LAST_UPDATED = datetime(2026, 11, 24, 22, 41, 5, tzinfo=UTC)
 
 
-def synthetic_bars(sessions: Sequence[date], rng: np.random.Generator) -> list[Bar]:
-    """Une barre par séance : clôtures en marche aléatoire, OHLC cohérents après arrondi."""
+def synthetic_bars(
+    sessions: Sequence[date], rng: np.random.Generator, *, start: float | None = None
+) -> list[Bar]:
+    """Une barre par séance : clôtures en marche aléatoire, OHLC cohérents après arrondi.
+
+    `start` : premier cours (défaut : tiré entre 20 et 500 $) ; un cours proche de 0,1 $
+    reproduit les cours anciens ajustés des splits (ex. NVDA en 2010).
+    """
     n = len(sessions)
     if n == 0:
         return []
-    start = rng.uniform(20.0, 500.0)
+    if start is None:
+        start = float(rng.uniform(20.0, 500.0))
     close = start * np.exp(np.cumsum(rng.normal(0.0003, 0.015, n)))
     previous = np.concatenate(([start], close[:-1]))
     open_ = previous * np.exp(rng.normal(0.0, 0.005, n))
@@ -45,6 +55,21 @@ def synthetic_bars(sessions: Sequence[date], rng: np.random.Generator) -> list[B
     ]
 
 
+def synthetic_prices(
+    symbol: str, sessions: Sequence[date], rng: np.random.Generator, *, start: float | None = None
+) -> PricesFile:
+    """Fichier de prix synthétique en mémoire (contrat §2)."""
+    return PricesFile(
+        schema_version=1,
+        symbol=symbol,
+        currency="USD",
+        source="yfinance",
+        columns=PRICE_COLUMNS,
+        last_updated=LAST_UPDATED,
+        bars=synthetic_bars(sessions, rng, start=start),
+    )
+
+
 def write_synthetic_prices(
     directory: Path, symbols: Sequence[str], sessions: Sequence[date], rng: np.random.Generator
 ) -> dict[str, Path]:
@@ -53,16 +78,57 @@ def write_synthetic_prices(
     directory.mkdir(parents=True, exist_ok=True)
     paths: dict[str, Path] = {}
     for symbol in symbols:
-        prices = PricesFile(
-            schema_version=1,
-            symbol=symbol,
-            currency="USD",
-            source="yfinance",
-            columns=PRICE_COLUMNS,
-            last_updated=LAST_UPDATED,
-            bars=synthetic_bars(sessions, rng),
-        )
+        prices = synthetic_prices(symbol, sessions, rng)
         path = directory / f"{symbol}.json"
         path.write_text(dumps_prices(prices), encoding="utf-8", newline="\n")
         paths[symbol] = path
     return paths
+
+
+# --- Export d'exemple en mémoire (F08 T18) ------------------------------------------------------
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "export"
+SAMPLE_NOW = datetime(2026, 11, 24, 22, 50, 12, tzinfo=UTC)
+SAMPLE_SHA = "430115d4c1f0e2b3a49587c6d1e0f2a3b4c5d6e7"
+
+
+def sample_universe() -> UniverseConfig:
+    return UniverseConfig.model_validate(
+        {
+            "currency": "USD",
+            "benchmark": "SPY",
+            "tickers": [
+                {"symbol": s, "name": s, "sector": "Tech", "start": "2010-01-01"}
+                for s in ("AAPL", "MSFT", "NVDA")
+            ],
+        }
+    )
+
+
+def sample_export_files() -> dict[str, bytes]:
+    """Tous les fichiers d'un export M1 réaliste, rendus en mémoire : 300 séances de prix
+    synthétiques (NVDA vers 0,12 $), rapports de run et signaux des fixtures."""
+    calendar = NyseCalendar()
+    first = calendar.shift(date(2026, 11, 23), -299)
+    days = calendar.sessions(first, date(2026, 11, 23))
+    rng = np.random.default_rng(2026)
+    prices = {
+        symbol: synthetic_prices(symbol, days, rng, start=0.12 if symbol == "NVDA" else None)
+        for symbol in ("AAPL", "MSFT", "NVDA", "SPY")
+    }
+    reports = sorted(
+        (RunReport.model_validate_json(p.read_bytes()) for p in (FIXTURES / "runs").glob("*.json")),
+        key=lambda report: report.session_date,
+        reverse=True,
+    )
+    signals = sorted(
+        (
+            SignalsFile.model_validate_json(p.read_bytes())
+            for p in (FIXTURES / "signals").glob("2*.json")
+        ),
+        key=lambda file: file.date,
+    )
+    sources = Sources(prices=prices, reports=reports, signals=signals)
+    return render_files(
+        sample_universe(), sources, calendar=calendar, now=SAMPLE_NOW, git_sha=SAMPLE_SHA
+    )
