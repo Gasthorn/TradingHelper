@@ -125,7 +125,7 @@
 
 ## Orchestration (`export/dashboard.py`)
 
-- [ ] **T14** [P] Générateur de données synthétiques pour les tests — R19
+- [x] **T14** [P] Générateur de données synthétiques pour les tests — R19
   - Tests : `tests/test_synthetic.py::test_generated_files_are_valid_prices` (`PricesFile.model_validate` et
     `quality.check_rows` sans violation), `::test_same_seed_same_bytes`, `::test_dates_are_nyse_sessions`.
   - Fichiers : `tests/synthetic.py` (`write_synthetic_prices(dir, symbols, sessions, rng)` : marche aléatoire géométrique
