@@ -172,6 +172,96 @@ class IngestRun(_Contract):
         return self
 
 
+# --- Section `validate` du rapport de run (F02 R8) ----------------------------------------------
+
+# Violations bloquantes (F02 R1, R2) : `th validate` sort en code 1.
+BlockingRule = Literal[
+    "unreadable",
+    "schema",
+    "symbol_mismatch",
+    "empty_bars",
+    "dates_not_increasing",
+    "non_session_date",
+    "after_last_session",
+    "non_positive_price",
+    "negative_volume",
+    "ohlc_inconsistent",
+    "not_rounded",
+]
+
+# Avertissements (F02 R3) : sans effet sur le code de sortie.
+QualityWarningRule = Literal[
+    "missing_session", "large_move", "zero_volume", "stale", "missing_file"
+]
+
+# Avertissements portant sur le fichier entier : ni `start` ni `end`.
+UNDATED_WARNING_RULES: Final[frozenset[str]] = frozenset({"stale", "missing_file"})
+
+
+class ValidateArgs(_Contract):
+    """Arguments de `th validate` journalisés (P4)."""
+
+    symbols: list[Symbol] | None
+    all_history: bool
+
+
+class ValidateViolation(_Contract):
+    """Violation bloquante (F02 R1, R2). `symbol` est le nom du fichier sans `.json` : il peut
+    ne pas être un symbole valide (fichier orphelin quelconque)."""
+
+    symbol: str
+    date: date | None  # None : erreur de fichier ou d'en-tête
+    rule: BlockingRule
+    detail: str
+
+
+class ValidateWarning(_Contract):
+    """Anomalie non bloquante (F02 R3), sur une barre (`start == end`) ou une plage de séances.
+
+    `value` : variation simple pour `large_move`, nombre de séances pour `missing_session`
+    et `stale` ; absente sinon.
+    """
+
+    symbol: Symbol
+    rule: QualityWarningRule
+    start: date | None
+    end: date | None
+    value: float | None = None
+
+    @model_validator(mode="after")
+    def _dates(self) -> Self:
+        undated = self.rule in UNDATED_WARNING_RULES
+        if undated and (self.start is not None or self.end is not None):
+            raise ValueError(f"`{self.rule}` ne porte ni `start` ni `end`")
+        if not undated:
+            if self.start is None or self.end is None:
+                raise ValueError(f"`{self.rule}` exige `start` et `end`")
+            if self.start > self.end:
+                raise ValueError("start postérieur à end")
+        return self
+
+
+class ValidateRun(_Contract):
+    """Une exécution de `th validate` (F02 R8)."""
+
+    started_at: UtcDatetime
+    finished_at: UtcDatetime
+    duration_s: NonNegativeFloat
+    args: ValidateArgs
+    exit_code: Literal[0, 1]
+    files_checked: NonNegativeInt
+    violations: list[ValidateViolation]
+    warnings: list[ValidateWarning]
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if self.finished_at < self.started_at:
+            raise ValueError("finished_at antérieur à started_at")
+        if (self.exit_code == 1) != bool(self.violations):
+            raise ValueError("exit_code doit valoir 1 si et seulement s'il y a des violations")
+        return self
+
+
 class RunReport(BaseModel):
     """Rapport de run d'une séance. Chaque commande met à jour sa seule section ;
     les sections des autres features (ex. `validate`, F02) sont conservées telles quelles."""

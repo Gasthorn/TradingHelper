@@ -7,7 +7,7 @@
 
 ## Contrats
 
-- [ ] **T1** Modèles de la section `validate` — R8
+- [x] **T1** Modèles de la section `validate` — R8
   - Tests : `tests/test_schemas.py::test_validate_run_accepts_valid_entry`, `::test_validate_run_rules[...]`, paramétré sur :
     - `exit_code: 1` sans violation, et `exit_code: 0` avec violation → refusés ;
     - `finished_at < started_at` → refusé ;

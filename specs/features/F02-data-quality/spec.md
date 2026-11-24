@@ -1,6 +1,6 @@
 # F02 — Validation & qualité des données
 
-- **Statut** : 🧭 Planned
+- **Statut** : 🚧 In progress
 - **Milestone** : M1
 - **Dépend de** : F01
 - **Contrats** : `03-data-contracts.md` §2 (lecture), §6 (section `validate`)

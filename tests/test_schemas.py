@@ -20,6 +20,9 @@ from tradinghelper.schemas import (
     IngestWarning,
     PricesFile,
     RunReport,
+    ValidateRun,
+    ValidateViolation,
+    ValidateWarning,
     render_json_schemas,
     write_json_schemas,
 )
@@ -298,6 +301,124 @@ INVALID_RUNS: dict[str, dict[str, Any]] = {
 def test_ingest_run_rejects_invalid(data: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         RunReport.model_validate(data)
+
+
+# --- Section `validate` du rapport de run (F02 — R8) -------------------------------------------
+
+
+def _validate_run(**changes: Any) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "started_at": "2026-11-23T22:33:00Z",
+        "finished_at": "2026-11-23T22:33:01Z",
+        "duration_s": 1.2,
+        "args": {"symbols": None, "all_history": False},
+        "exit_code": 1,
+        "files_checked": 3,
+        "violations": [
+            {
+                "symbol": "AAPL",
+                "date": "2026-11-20",
+                "rule": "ohlc_inconsistent",
+                "detail": "high 227.0 < max(open, close) 230.95",
+            },
+            {"symbol": "readme", "date": None, "rule": "unreadable", "detail": "JSON invalide"},
+        ],
+        "warnings": [
+            {
+                "symbol": "MSFT",
+                "rule": "missing_session",
+                "start": "2026-11-17",
+                "end": "2026-11-18",
+                "value": 2,
+            },
+            {
+                "symbol": "NVDA",
+                "rule": "large_move",
+                "start": "2026-11-23",
+                "end": "2026-11-23",
+                "value": 0.6,
+            },
+            {"symbol": "SPY", "rule": "zero_volume", "start": "2026-11-23", "end": "2026-11-23"},
+            {"symbol": "TSLA", "rule": "stale", "start": None, "end": None, "value": 5},
+            {"symbol": "META", "rule": "missing_file", "start": None, "end": None},
+        ],
+    }
+    data.update(changes)
+    return data
+
+
+def _warning(**changes: Any) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "symbol": "AAPL",
+        "rule": "large_move",
+        "start": "2026-11-23",
+        "end": "2026-11-23",
+        "value": 0.6,
+    }
+    data.update(changes)
+    return data
+
+
+def test_validate_run_accepts_valid_entry() -> None:
+    run = ValidateRun.model_validate(_validate_run())
+
+    assert run.exit_code == 1
+    assert [v.rule for v in run.violations] == ["ohlc_inconsistent", "unreadable"]
+    assert run.violations[1].symbol == "readme"  # nom de fichier quelconque (orphelin)
+    assert run.warnings[3].start is None
+    assert ValidateRun.model_validate(run.model_dump(mode="json")) == run
+
+
+def test_validate_run_without_violation_exits_0() -> None:
+    run = ValidateRun.model_validate(_validate_run(exit_code=0, violations=[]))
+
+    assert run.exit_code == 0
+
+
+INVALID_VALIDATE_RUNS: dict[str, dict[str, Any]] = {
+    "code 1 sans violation": _validate_run(violations=[]),
+    "code 0 avec violation": _validate_run(exit_code=0),
+    "code de sortie 2": _validate_run(exit_code=2),
+    "fin avant début": _validate_run(finished_at="2026-11-23T22:32:00Z"),
+    "horodatage hors UTC": _validate_run(started_at="2026-11-23T23:33:00+01:00"),
+    "fichiers vérifiés négatif": _validate_run(files_checked=-1),
+    "règle bloquante inconnue": _validate_run(
+        violations=[{"symbol": "AAPL", "date": None, "rule": "bad_rule", "detail": "x"}]
+    ),
+    "règle d'avertissement inconnue": _validate_run(warnings=[_warning(rule="bad_rule")]),
+    "début après fin": _validate_run(warnings=[_warning(start="2026-11-24")]),
+    "large_move sans dates": _validate_run(warnings=[_warning(start=None, end=None)]),
+    "large_move sans fin": _validate_run(warnings=[_warning(end=None)]),
+    "stale avec dates": _validate_run(warnings=[_warning(rule="stale")]),
+    "missing_file avec dates": _validate_run(warnings=[_warning(rule="missing_file")]),
+    "symbole d'avertissement invalide": _validate_run(warnings=[_warning(symbol="aapl")]),
+    "clé inconnue": _validate_run(extra=1),
+    "argument inconnu": _validate_run(args={"symbols": None, "all_history": False, "full": True}),
+}
+
+
+@pytest.mark.parametrize(
+    "data", list(INVALID_VALIDATE_RUNS.values()), ids=list(INVALID_VALIDATE_RUNS)
+)
+def test_validate_run_rules(data: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        ValidateRun.model_validate(data)
+
+
+def test_validate_violation_symbol_is_free_text() -> None:
+    violation = ValidateViolation.model_validate(
+        {"symbol": "readme", "date": None, "rule": "schema", "detail": "bars: champ requis"}
+    )
+
+    assert violation.symbol == "readme"
+
+
+def test_validate_warning_value_is_optional() -> None:
+    warning = ValidateWarning.model_validate(
+        {"symbol": "SPY", "rule": "zero_volume", "start": "2026-11-23", "end": "2026-11-23"}
+    )
+
+    assert warning.value is None
 
 
 def test_run_report_requires_schema_version_and_session_date() -> None:
