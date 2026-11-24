@@ -64,7 +64,7 @@
   - Fichiers : `src/tradinghelper/data/quality.py` (`ohlc_consistent`, fin de `check_rows`), `src/tradinghelper/data/bars.py` (utilise `ohlc_consistent`).
   - Fini quand : tests verts, dont tous les tests existants de `test_bars.py` ; qualité verte.
 
-- [ ] **T7** Avertissements `large_move` et `zero_volume` — R3
+- [x] **T7** Avertissements `large_move` et `zero_volume` — R3
   - Tests : `tests/data/test_quality.py::test_large_move_thresholds[...]`, paramétré sur :
     - +60 % → avertissement, `value = 0.6` ;
     - −30 % → avertissement ;

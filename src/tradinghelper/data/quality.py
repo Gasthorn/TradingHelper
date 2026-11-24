@@ -6,16 +6,30 @@ garder ces règles testables isolément (CLAUDE.md : fonctions pures isolées de
 
 from __future__ import annotations
 
+import itertools
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Final
 
 from pydantic import JsonValue
 
-from tradinghelper.schemas import PRICE_DECIMALS, Bar, BlockingRule, ValidateViolation
+from tradinghelper.schemas import (
+    PRICE_DECIMALS,
+    Bar,
+    BlockingRule,
+    ValidateViolation,
+    ValidateWarning,
+)
 
 ROW_LENGTH = 7  # date, open, high, low, close, adj_close, volume (contrat §2)
+
+# Saut de cours (F02, définitions) : |ln(close_t / close_{t-1})| > ln(1,4), soit +40 % ou -28,6 %.
+LARGE_MOVE_LOG: Final = math.log(1.4)
+
+# Décimales de la variation simple journalisée dans `value`.
+VALUE_DECIMALS: Final = 4
 
 
 @dataclass(frozen=True)
@@ -152,3 +166,33 @@ def check_rows(
         bars.append(parsed)
 
     return RowCheck(bars=[] if violations else bars, violations=violations)
+
+
+# --- Avertissements (F02 R3) : sur des barres déjà conformes à R2 -------------------------------
+
+
+def large_moves(symbol: str, bars: Sequence[Bar], *, since: date) -> list[ValidateWarning]:
+    """Sauts de cours des barres datées `>= since` : `|ln(close_t / close_{t-1})| > ln(1,4)`.
+
+    `t-1` est la barre précédente du fichier (elle peut précéder `since`) ; `value` est la
+    variation simple, arrondie à 4 décimales.
+    """
+    warnings: list[ValidateWarning] = []
+    for previous, current in itertools.pairwise(bars):
+        day, close, previous_close = current[0], current[4], previous[4]
+        if day < since or abs(math.log(close / previous_close)) <= LARGE_MOVE_LOG:
+            continue
+        change = round(close / previous_close - 1, VALUE_DECIMALS)
+        warnings.append(
+            ValidateWarning(symbol=symbol, rule="large_move", start=day, end=day, value=change)
+        )
+    return warnings
+
+
+def zero_volumes(symbol: str, bars: Sequence[Bar], *, since: date) -> list[ValidateWarning]:
+    """Barres de volume nul datées `>= since`, une par avertissement."""
+    return [
+        ValidateWarning(symbol=symbol, rule="zero_volume", start=bar[0], end=bar[0])
+        for bar in bars
+        if bar[0] >= since and bar[6] == 0
+    ]

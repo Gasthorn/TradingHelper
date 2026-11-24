@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date
 from typing import Any
 
 import pytest
 
+from tradinghelper.data import bars, quality
 from tradinghelper.data.calendar import NyseCalendar
-from tradinghelper.data.quality import RowCheck, check_rows
+from tradinghelper.data.quality import (
+    LARGE_MOVE_LOG,
+    RowCheck,
+    check_rows,
+    large_moves,
+    zero_volumes,
+)
+from tradinghelper.schemas import Bar
 
 CAL = NyseCalendar()
 S = date(2026, 11, 24)  # dernière séance clôturée des tests (mardi)
@@ -224,9 +233,74 @@ def test_multiple_rules_on_same_row() -> None:
 
 def test_ohlc_consistent_shared_with_bars() -> None:
     """F01 (nettoyage) et F02 (validation) appliquent le même prédicat OHLC."""
-    from tradinghelper.data import bars, quality
-
     assert bars.ohlc_consistent is quality.ohlc_consistent
     assert quality.ohlc_consistent(open_=10.0, high=11.0, low=9.0, close=10.5)
     assert not quality.ohlc_consistent(open_=10.0, high=10.2, low=9.0, close=10.5)
     assert not quality.ohlc_consistent(open_=10.0, high=11.0, low=10.1, close=10.5)
+
+
+# --- Avertissements large_move et zero_volume (T7) ---------------------------------------------
+
+
+def _bars(closes: list[float], *, end: date = S, volumes: list[int] | None = None) -> list[Bar]:
+    """Barres sur les dernières séances jusqu'à `end`, avec les `closes` donnés (OHLC cohérents)."""
+    days = CAL.sessions(CAL.shift(end, -(len(closes) - 1)), end)
+    vols = volumes if volumes is not None else [1_000_000] * len(closes)
+    return [
+        (day, close, close * 1.01, close * 0.99, close, close, vol)
+        for day, close, vol in zip(days, closes, vols, strict=True)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("new_close", "expected_value"),
+    [(160.0, 0.6), (70.0, -0.3), (135.0, None), (140.0, None), (71.4, -0.286)],
+    ids=[
+        "+60%→avertissement",
+        "-30%→avertissement",
+        "+35%→rien",
+        "+40%→rien (seuil strict)",
+        "-28,6%→avertissement (|ln| > ln 1,4)",
+    ],
+)
+def test_large_move_thresholds(new_close: float, expected_value: float | None) -> None:
+    bars = _bars([100.0, new_close])
+
+    warnings = large_moves("AAPL", bars, since=bars[0][0])
+
+    if expected_value is None:
+        assert warnings == []
+    else:
+        assert [(w.rule, w.start, w.end, w.value) for w in warnings] == [
+            ("large_move", S, S, expected_value)
+        ]
+        assert warnings[0].symbol == "AAPL"
+
+
+def test_large_move_threshold_constant() -> None:
+    assert math.isclose(LARGE_MOVE_LOG, math.log(1.4))
+
+
+def test_large_move_only_since_window_start() -> None:
+    """La barre `t` doit être dans la fenêtre ; `t-1` peut la précéder."""
+    bars = _bars([100.0, 200.0, 200.0, 400.0])  # sauts aux barres 1 et 3
+
+    warnings = large_moves("AAPL", bars, since=bars[3][0])
+
+    assert [w.start for w in warnings] == [bars[3][0]]
+    assert len(large_moves("AAPL", bars, since=bars[0][0])) == 2
+
+
+def test_large_move_single_bar_none() -> None:
+    assert large_moves("AAPL", _bars([100.0]), since=date(2026, 1, 1)) == []
+
+
+def test_zero_volume_warns_each_bar_in_window() -> None:
+    bars = _bars([100.0] * 4, volumes=[0, 5, 0, 0])
+
+    warnings = zero_volumes("SPY", bars, since=bars[1][0])
+
+    assert [(w.rule, w.start, w.end, w.value) for w in warnings] == [
+        ("zero_volume", bars[2][0], bars[2][0], None),
+        ("zero_volume", bars[3][0], bars[3][0], None),
+    ]
