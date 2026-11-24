@@ -12,9 +12,13 @@ from tradinghelper.data import bars, quality
 from tradinghelper.data.calendar import NyseCalendar
 from tradinghelper.data.quality import (
     LARGE_MOVE_LOG,
+    RECENT_SESSIONS,
+    STALE_SESSIONS,
     RowCheck,
     check_rows,
     large_moves,
+    missing_sessions,
+    stale,
     zero_volumes,
 )
 from tradinghelper.schemas import Bar
@@ -304,3 +308,95 @@ def test_zero_volume_warns_each_bar_in_window() -> None:
         ("zero_volume", bars[2][0], bars[2][0], None),
         ("zero_volume", bars[3][0], bars[3][0], None),
     ]
+
+
+# --- Avertissements missing_session et stale (T8) ----------------------------------------------
+
+
+def _bars_on(days: list[date]) -> list[Bar]:
+    return [(day, 100.0, 101.0, 99.0, 100.0, 100.0, 1_000_000) for day in days]
+
+
+def _sessions_between(bars: list[Bar]) -> list[date]:
+    return CAL.sessions(bars[0][0], bars[-1][0])
+
+
+def test_missing_sessions_grouped_in_ranges() -> None:
+    days = CAL.sessions(date(2026, 11, 2), date(2026, 11, 13))  # 10 séances
+    kept = [d for d in days if d not in {days[2], days[3], days[7]}]
+    bars = _bars_on(kept)
+
+    warnings = missing_sessions("AAPL", bars, _sessions_between(bars))
+
+    assert [(w.rule, w.start, w.end, w.value) for w in warnings] == [
+        ("missing_session", days[2], days[3], 2.0),
+        ("missing_session", days[7], days[7], 1.0),
+    ]
+    assert warnings[0].symbol == "AAPL"
+
+
+def test_no_missing_session_when_complete() -> None:
+    bars = _bars_on(CAL.sessions(date(2026, 11, 2), date(2026, 11, 13)))
+
+    assert missing_sessions("AAPL", bars, _sessions_between(bars)) == []
+
+
+def test_holiday_and_half_day_not_missing() -> None:
+    """Thanksgiving (26/11/2026) absent, demi-séance du 27/11/2026 présente : rien."""
+    bars = _bars_on(CAL.sessions(date(2026, 11, 23), date(2026, 11, 30)))
+
+    assert date(2026, 11, 26) not in [b[0] for b in bars]
+    assert date(2026, 11, 27) in [b[0] for b in bars]
+    assert missing_sessions("AAPL", bars, _sessions_between(bars)) == []
+
+
+def test_half_day_missing_is_reported() -> None:
+    days = CAL.sessions(date(2026, 11, 23), date(2026, 11, 30))
+    bars = _bars_on([d for d in days if d != date(2026, 11, 27)])
+
+    warnings = missing_sessions("AAPL", bars, _sessions_between(bars))
+
+    assert [(w.start, w.end) for w in warnings] == [(date(2026, 11, 27), date(2026, 11, 27))]
+
+
+def test_exceptional_closure_not_missing() -> None:
+    """Fermeture exceptionnelle du 09/01/2025 (deuil national) : pas une séance manquante."""
+    bars = _bars_on(CAL.sessions(date(2025, 1, 6), date(2025, 1, 13)))
+
+    assert date(2025, 1, 9) not in [b[0] for b in bars]
+    assert missing_sessions("AAPL", bars, _sessions_between(bars)) == []
+
+
+def test_missing_sessions_restricted_to_given_sessions() -> None:
+    """Le trou hors des séances examinées (fenêtre récente) n'est pas signalé."""
+    days = CAL.sessions(date(2026, 11, 2), date(2026, 11, 13))
+    bars = _bars_on([d for d in days if d != days[1]])
+
+    assert missing_sessions("AAPL", bars, CAL.sessions(days[5], days[-1])) == []
+
+
+@pytest.mark.parametrize(
+    ("last_date", "sessions_late", "expected"),
+    [(date(2026, 11, 19), 3, False), (date(2026, 11, 18), 4, True), (S, 0, False)],
+    ids=["S-3→rien", "S-4→stale", "à jour→rien"],
+)
+def test_stale_boundary(last_date: date, sessions_late: int, expected: bool) -> None:
+    threshold = CAL.shift(S, -STALE_SESSIONS)
+
+    warning = stale("MSFT", last_date, threshold=threshold, sessions_late=sessions_late)
+
+    if expected:
+        assert warning is not None
+        assert (warning.rule, warning.start, warning.end, warning.value) == (
+            "stale",
+            None,
+            None,
+            float(sessions_late),
+        )
+    else:
+        assert warning is None
+
+
+def test_window_constants() -> None:
+    assert RECENT_SESSIONS == 10
+    assert STALE_SESSIONS == 3

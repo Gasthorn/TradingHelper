@@ -74,7 +74,7 @@
   - Fichiers : `src/tradinghelper/data/quality.py` (`large_moves`, `zero_volumes`).
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T8** [P] Avertissements `missing_session` et `stale` — R3
+- [x] **T8** [P] Avertissements `missing_session` et `stale` — R3
   - Tests : `tests/data/test_quality.py::test_missing_sessions_grouped_in_ranges` (2 séances consécutives manquantes → 1 plage, `value = 2` ; 2 trous séparés → 2 plages), `::test_holiday_and_half_day_not_missing` (Thanksgiving 26/11/2026 absent, demi-séance du 27/11/2026 présente → rien), `::test_exceptional_closure_not_missing` (09/01/2025), `::test_stale_boundary[...]` (`S−3` → rien, `S−4` → `stale`, `value` = séances de retard).
   - Fichiers : `src/tradinghelper/data/quality.py` (`missing_sessions`, `stale`).
   - Fini quand : tests verts ; qualité verte.

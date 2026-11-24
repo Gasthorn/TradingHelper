@@ -28,6 +28,12 @@ ROW_LENGTH = 7  # date, open, high, low, close, adj_close, volume (contrat §2)
 # Saut de cours (F02, définitions) : |ln(close_t / close_{t-1})| > ln(1,4), soit +40 % ou -28,6 %.
 LARGE_MOVE_LOG: Final = math.log(1.4)
 
+# Fenêtre récente (F02, définitions) : les séances S - 9 … S.
+RECENT_SESSIONS: Final = 10
+
+# Stale : dernière date strictement antérieure à S - 3 séances.
+STALE_SESSIONS: Final = 3
+
 # Décimales de la variation simple journalisée dans `value`.
 VALUE_DECIMALS: Final = 4
 
@@ -196,3 +202,54 @@ def zero_volumes(symbol: str, bars: Sequence[Bar], *, since: date) -> list[Valid
         for bar in bars
         if bar[0] >= since and bar[6] == 0
     ]
+
+
+def missing_sessions(
+    symbol: str, bars: Sequence[Bar], sessions: Sequence[date]
+) -> list[ValidateWarning]:
+    """Séances de `sessions` absentes de `bars`, regroupées en plages consécutives.
+
+    `sessions` : séances NYSE examinées, triées, comprises entre la première et la dernière date
+    du fichier (et, par défaut, dans la fenêtre récente). Jours fériés, fermetures
+    exceptionnelles et demi-séances sont gérés par le calendrier qui fournit `sessions`.
+    `value` : nombre de séances manquantes de la plage.
+    """
+    present = {bar[0] for bar in bars}
+    warnings: list[ValidateWarning] = []
+    run: list[date] = []
+
+    def flush() -> None:
+        if run:
+            warnings.append(
+                ValidateWarning(
+                    symbol=symbol,
+                    rule="missing_session",
+                    start=run[0],
+                    end=run[-1],
+                    value=float(len(run)),
+                )
+            )
+            run.clear()
+
+    for session in sessions:
+        if session in present:
+            flush()
+        else:
+            run.append(session)
+    flush()
+    return warnings
+
+
+def stale(
+    symbol: str, last_date: date, *, threshold: date, sessions_late: int
+) -> ValidateWarning | None:
+    """Avertissement `stale` si `last_date < threshold` (= S - 3 séances), sinon None.
+
+    `sessions_late` : nombre de séances entre `last_date` (exclue) et S (incluse), journalisé
+    dans `value`.
+    """
+    if last_date >= threshold:
+        return None
+    return ValidateWarning(
+        symbol=symbol, rule="stale", start=None, end=None, value=float(sessions_late)
+    )
