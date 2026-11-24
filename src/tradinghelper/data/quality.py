@@ -6,13 +6,14 @@ garder ces règles testables isolément (CLAUDE.md : fonctions pures isolées de
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 
 from pydantic import JsonValue
 
-from tradinghelper.schemas import Bar, BlockingRule, ValidateViolation
+from tradinghelper.schemas import PRICE_DECIMALS, Bar, BlockingRule, ValidateViolation
 
 ROW_LENGTH = 7  # date, open, high, low, close, adj_close, volume (contrat §2)
 
@@ -24,6 +25,14 @@ class RowCheck:
 
     bars: list[Bar] = field(default_factory=list)
     violations: list[ValidateViolation] = field(default_factory=list)
+
+
+def ohlc_consistent(*, open_: float, high: float, low: float, close: float) -> bool:
+    """`low <= min(open, close)` et `high >= max(open, close)` (contrat §2).
+
+    Prédicat partagé par le nettoyage de F01 (`bars.py`) et la validation de F02.
+    """
+    return low <= min(open_, close) and high >= max(open_, close)
 
 
 def _parse_date(value: JsonValue) -> date | None:
@@ -113,6 +122,33 @@ def check_rows(
                 f"{where} postérieure à la dernière séance clôturée {last_session.isoformat()}",
             )
 
+        _, open_, high, low, close, adj_close, volume = parsed
+        prices = {"open": open_, "high": high, "low": low, "close": close, "adj_close": adj_close}
+        invalid = {name: p for name, p in prices.items() if not (math.isfinite(p) and p > 0)}
+        if invalid:
+            listed = ", ".join(f"{name}={p!r}" for name, p in invalid.items())
+            report(day, "non_positive_price", f"{where} : prix non strictement positif ({listed})")
+        unrounded = [
+            f"{name}={p!r}"
+            for name, p in prices.items()
+            if name not in invalid and round(p, PRICE_DECIMALS) != p
+        ]
+        if unrounded:
+            report(
+                day,
+                "not_rounded",
+                f"{where} : prix non arrondi à {PRICE_DECIMALS} décimales ({', '.join(unrounded)})",
+            )
+        if volume < 0:
+            report(day, "negative_volume", f"{where} : volume {volume} < 0")
+        # Comparaison sans objet si un prix est invalide (déjà signalé).
+        if not invalid and not ohlc_consistent(open_=open_, high=high, low=low, close=close):
+            report(
+                day,
+                "ohlc_inconsistent",
+                f"{where} : low {low} / high {high} incompatibles avec open {open_} "
+                f"et close {close}",
+            )
         bars.append(parsed)
 
     return RowCheck(bars=[] if violations else bars, violations=violations)

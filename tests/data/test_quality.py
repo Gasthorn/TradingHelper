@@ -138,3 +138,95 @@ def test_schema_error_does_not_stop_following_rows() -> None:
         (date(2026, 11, 20), "schema"),
         (date(2026, 11, 25), "after_last_session"),
     ]
+
+
+# --- Prix, volume, OHLC (T6) -------------------------------------------------------------------
+
+NAN = float("nan")
+INF = float("inf")
+D23 = date(2026, 11, 23)
+
+
+def _row23(**changes: Any) -> list[Any]:
+    """Ligne valide du 23/11/2026, modifiée par position nommée."""
+    values: dict[str, Any] = {
+        "open": 231.0,
+        "high": 233.12,
+        "low": 229.6,
+        "close": 232.4,
+        "adj_close": 231.1734,
+        "volume": 48765000,
+    }
+    values.update(changes)
+    return ["2026-11-23", *values.values()]
+
+
+BLOCKING_CASES_T6: dict[str, tuple[list[Any], list[tuple[date | None, str]]]] = {
+    "prix à 0": (_rows(1, _row23(open=0.0, low=0.0)), [(D23, "non_positive_price")]),
+    "prix négatif": (_rows(1, _row23(adj_close=-1.5)), [(D23, "non_positive_price")]),
+    "NaN": (_rows(1, _row23(close=NAN)), [(D23, "non_positive_price")]),
+    "NaN sur adj_close": (_rows(1, _row23(adj_close=NAN)), [(D23, "non_positive_price")]),
+    "Infinity": (_rows(1, _row23(high=INF)), [(D23, "non_positive_price")]),
+    "prix non arrondi": (_rows(1, _row23(adj_close=231.17345)), [(D23, "not_rounded")]),
+    "volume négatif": (_rows(1, _row23(volume=-1)), [(D23, "negative_volume")]),
+    "high < low": (_rows(1, _row23(high=229.0)), [(D23, "ohlc_inconsistent")]),
+    "low > open": (_rows(1, _row23(low=231.5)), [(D23, "ohlc_inconsistent")]),
+    "high < close": (_rows(1, _row23(high=232.0)), [(D23, "ohlc_inconsistent")]),
+}
+
+
+@pytest.mark.parametrize(
+    ("rows", "expected"), list(BLOCKING_CASES_T6.values()), ids=list(BLOCKING_CASES_T6)
+)
+def test_blocking_rule_prices(rows: list[Any], expected: list[tuple[date | None, str]]) -> None:
+    result = _check(rows)
+
+    assert _rules(result) == expected
+    assert result.bars == []
+
+
+def test_zero_volume_is_not_blocking() -> None:
+    result = _check(_rows(1, _row23(volume=0)))
+
+    assert result.violations == []
+    assert result.bars[1][6] == 0
+
+
+def test_ohlc_equal_bounds_accepted() -> None:
+    result = _check(_rows(1, _row23(open=229.6, low=229.6, close=233.12, high=233.12)))
+
+    assert result.violations == []
+
+
+def test_all_violations_reported_not_only_first() -> None:
+    rows = [
+        ["2026-11-20", 228.1, 227.0, 227.8, 230.95, 229.7312, 51234000],  # high < low
+        _row23(volume=-5),
+        ["2026-11-24", 232.4, 234.0, 231.0, 233.5, 0.0, 45000000],
+    ]
+
+    assert _rules(_check(rows)) == [
+        (date(2026, 11, 20), "ohlc_inconsistent"),
+        (D23, "negative_volume"),
+        (date(2026, 11, 24), "non_positive_price"),
+    ]
+
+
+def test_multiple_rules_on_same_row() -> None:
+    """Date dupliquée et `high < low` sur la même ligne : deux violations."""
+    rows = _rows(1, ["2026-11-20", 231.0, 229.0, 229.6, 232.4, 231.1734, 48765000])
+
+    assert _rules(_check(rows)) == [
+        (date(2026, 11, 20), "dates_not_increasing"),
+        (date(2026, 11, 20), "ohlc_inconsistent"),
+    ]
+
+
+def test_ohlc_consistent_shared_with_bars() -> None:
+    """F01 (nettoyage) et F02 (validation) appliquent le même prédicat OHLC."""
+    from tradinghelper.data import bars, quality
+
+    assert bars.ohlc_consistent is quality.ohlc_consistent
+    assert quality.ohlc_consistent(open_=10.0, high=11.0, low=9.0, close=10.5)
+    assert not quality.ohlc_consistent(open_=10.0, high=10.2, low=9.0, close=10.5)
+    assert not quality.ohlc_consistent(open_=10.0, high=11.0, low=10.1, close=10.5)

@@ -54,7 +54,7 @@
   - Fichiers : `src/tradinghelper/data/quality.py` (`RowCheck`, `check_rows`, constantes), `tests/data/test_quality.py`.
   - Fini quand : tests verts ; `quality.py` n'importe ni `pathlib`, ni `os`, ni `storage` (test AST dans `tests/test_repo_hygiene.py::test_quality_module_is_pure`).
 
-- [ ] **T6** `check_rows` : prix, volume, OHLC, toutes les violations — R2
+- [x] **T6** `check_rows` : prix, volume, OHLC, toutes les violations — R2
   - Tests : `tests/data/test_quality.py::test_blocking_rule[...]` (seconde moitié), paramétré sur :
     - prix à 0, prix négatif, `NaN`, `Infinity` (dont sur `adj_close`) → `non_positive_price` ;
     - `228.12345` → `not_rounded` ;
