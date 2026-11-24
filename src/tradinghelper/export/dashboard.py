@@ -9,18 +9,29 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Final
 
 from pydantic import BaseModel, ValidationError
 
 from tradinghelper.config import UniverseConfig, universe_targets
+from tradinghelper.data.calendar import NyseCalendar
 from tradinghelper.data.storage import PricesFileError, prices_path, read_json, read_prices
+from tradinghelper.export.build import (
+    build_health,
+    build_manifest,
+    build_overview,
+    build_ticker,
+    collect_markers,
+    compute_data_as_of,
+    render,
+)
 from tradinghelper.schemas import (
     HEALTH_RUNS,
     MANIFEST_NAME,
@@ -216,3 +227,103 @@ def replace_dir(out: Path, files: Mapping[str, bytes]) -> None:
         raise
     if backup is not None:
         shutil.rmtree(backup, ignore_errors=True)
+
+
+# --- Rendu et export complet (R1, R11, R15) ----------------------------------------------------
+
+#: SHA git accepté par le manifest (abrégé ou complet).
+_GIT_SHA: Final = re.compile(r"^[0-9a-f]{7,40}$")
+
+
+def resolve_git_sha(environ: Mapping[str, str], repo_root: Path) -> str | None:
+    """`GITHUB_SHA` (CI) s'il est valide, sinon `git rev-parse HEAD` dans `repo_root`, sinon
+    `None` (hors dépôt git, git absent) (R11)."""
+    from_env = environ.get("GITHUB_SHA", "").strip().lower()
+    if _GIT_SHA.match(from_env):
+        return from_env
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    sha = result.stdout.strip().lower()
+    return sha if _GIT_SHA.match(sha) else None
+
+
+def render_files(
+    universe: UniverseConfig,
+    sources: Sources,
+    *,
+    calendar: NyseCalendar,
+    now: datetime,
+    git_sha: str | None,
+) -> dict[str, bytes]:
+    """Tous les fichiers de l'export M1, rendus en octets ; le manifest en dernier, à partir des
+    octets des autres fichiers (empreintes exactes, R11). Déterministe à entrées égales (R15)."""
+    prices = sources.prices
+    last_dates = {symbol: file.bars[-1][0] for symbol, file in prices.items()}
+    data_as_of = compute_data_as_of(last_dates)
+    markers = collect_markers(sources.signals, set(prices))
+    files: dict[str, bytes] = {
+        f"tickers/{symbol}.json": render(build_ticker(file, markers[symbol]))
+        for symbol, file in prices.items()
+    }
+    files["overview.json"] = render(build_overview(prices, data_as_of))
+    files["health.json"] = render(
+        build_health(
+            [symbol for symbol, _start in universe_targets(universe)],
+            last_dates,
+            sources.reports,
+            session=calendar.last_closed_session(now),
+            calendar=calendar,
+        )
+    )
+    manifest = build_manifest(
+        universe,
+        prices,
+        files,
+        generated_at=now.astimezone(UTC).replace(microsecond=0),
+        git_sha=git_sha,
+        data_as_of=data_as_of,
+    )
+    files[MANIFEST_NAME] = render(manifest)
+    return files
+
+
+@dataclass(frozen=True)
+class ExportOutcome:
+    """Résultat de `th export`, pour le résumé affiché (R3)."""
+
+    out: Path
+    sizes: dict[str, int]  # chemin relatif → octets, manifest compris
+    data_as_of: date | None
+
+
+def export(
+    universe: UniverseConfig,
+    *,
+    data_root: Path,
+    out: Path,
+    repo_root: Path,
+    calendar: NyseCalendar,
+    now: Callable[[], datetime],
+    git_sha: str | None,
+) -> ExportOutcome:
+    """`th export` : vérifie `out` (`ExportTargetError`), lit les sources (`ExportSourceError`,
+    rien n'est écrit), rend tous les fichiers en mémoire puis remplace `out` (R1, R2, R13)."""
+    check_target(out, data_root=data_root, repo_root=repo_root)
+    sources = read_sources(universe, data_root)
+    files = render_files(universe, sources, calendar=calendar, now=now(), git_sha=git_sha)
+    replace_dir(out, files)
+    last_dates = {symbol: file.bars[-1][0] for symbol, file in sources.prices.items()}
+    return ExportOutcome(
+        out=out,
+        sizes={path: len(content) for path, content in sorted(files.items())},
+        data_as_of=compute_data_as_of(last_dates),
+    )

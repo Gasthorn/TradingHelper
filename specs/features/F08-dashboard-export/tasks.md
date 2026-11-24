@@ -154,7 +154,7 @@
     `tests/export/test_dashboard.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T17** `export()` de bout en bout et `git_sha` — R1, R9, R11, R13, R15
+- [x] **T17** `export()` de bout en bout et `git_sha` — R1, R9, R11, R13, R15
   - Tests : `test_dashboard.py::test_prices_only_repo_exports_m1_files` (`manifest`, `overview`, `health`, `tickers/*`
     benchmark compris ; `markers`, `leaderboard`, `latest_signals`, `strategies` vides ; pas de `portfolios/` ni `models.json`),
     `::test_signals_fixture_markers_on_aapl`, `::test_sources_untouched` (SHA-256 de tout `data/` avant/après),
