@@ -9,8 +9,9 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
+from datetime import date
 from typing import Final
 
 import numpy as np
@@ -18,7 +19,17 @@ import numpy.typing as npt
 from pydantic import BaseModel
 
 from tradinghelper.features.indicators import bollinger, rsi_wilder, sma
-from tradinghelper.schemas import ExportMarker, PricesFile, SignalsFile, TickerFile, TickerSeries
+from tradinghelper.schemas import (
+    SPARK_LENGTH,
+    ExportMarker,
+    Kpis,
+    OverviewFile,
+    OverviewTicker,
+    PricesFile,
+    SignalsFile,
+    TickerFile,
+    TickerSeries,
+)
 
 # Grille d'arrondi (spec F08, Définitions ; R14).
 PRICE_DECIMALS: Final = 4  # prix et indicateurs de prix (cours anciens ajustés < 1 $)
@@ -104,3 +115,38 @@ def collect_markers(
     for found in markers.values():
         found.sort(key=lambda marker: (marker.date, marker.strategy_id))
     return markers
+
+
+# --- Accueil et `data_as_of` (R10, R11) --------------------------------------------------------
+
+
+def compute_data_as_of(last_dates: Mapping[str, date]) -> date | None:
+    """Plus petite dernière date des symboles exportés (Définitions) : toutes les séries sont à
+    jour au moins jusqu'à cette date. `None` sans symbole exporté."""
+    return min(last_dates.values(), default=None)
+
+
+def _overview_ticker(prices: PricesFile) -> OverviewTicker:
+    closes = [bar[4] for bar in prices.bars]
+    if not closes:
+        raise ValueError(f"{prices.symbol} : aucune barre à exporter")
+    change = round(closes[-1] / closes[-2] - 1.0, RATIO_DECIMALS) if len(closes) > 1 else None
+    return OverviewTicker(
+        symbol=prices.symbol,
+        last_close=closes[-1],
+        change_1d=change,
+        spark=closes[-SPARK_LENGTH:],
+    )
+
+
+def build_overview(prices: Mapping[str, PricesFile], data_as_of: date | None) -> OverviewFile:
+    """`overview.json` (R10) : dernier cours, variation du jour et sparkline par symbole, dans
+    l'ordre reçu, pour que l'accueil ne charge aucun `tickers/*`. Sections M3 vides (R13)."""
+    return OverviewFile(
+        schema_version=1,
+        data_as_of=data_as_of,
+        tickers=[_overview_ticker(file) for file in prices.values()],
+        leaderboard=[],
+        latest_signals=[],
+        kpis=Kpis(best_strategy_30d=None),
+    )

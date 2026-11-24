@@ -98,7 +98,7 @@
   - Fichiers : `src/tradinghelper/export/build.py` (`build_ticker`, `collect_markers`), `tests/export/test_build.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T11** Accueil et `data_as_of` — R10, R11
+- [x] **T11** Accueil et `data_as_of` — R10, R11
   - Tests : `test_build.py::test_overview_spark_60_values`, `::test_overview_short_history_spark`, `::test_change_1d`,
     `::test_change_1d_null_single_bar`, `::test_overview_m1_sections_empty` (`leaderboard`, `latest_signals` vides,
     `kpis.best_strategy_30d` nul), `::test_data_as_of_is_min_last_date`, `::test_data_as_of_null_without_files`.

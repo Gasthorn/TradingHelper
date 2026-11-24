@@ -17,8 +17,10 @@ from tradinghelper.export.build import (
     PRICE_DECIMALS,
     RATIO_DECIMALS,
     RSI_DECIMALS,
+    build_overview,
     build_ticker,
     collect_markers,
+    compute_data_as_of,
     digest,
     render,
     rounded,
@@ -26,6 +28,7 @@ from tradinghelper.export.build import (
 from tradinghelper.features.indicators import bollinger, rsi_wilder, sma
 from tradinghelper.schemas import (
     PRICE_COLUMNS,
+    SPARK_LENGTH,
     ExportMarker,
     HealthRun,
     HealthValidate,
@@ -297,3 +300,90 @@ def test_markers_confidence_rounded() -> None:
 
 def test_markers_without_signals() -> None:
     assert collect_markers([], {"AAPL", "SPY"}) == {"AAPL": [], "SPY": []}
+
+
+# --- Accueil et `data_as_of` (T11) --------------------------------------------------------------
+
+
+def test_overview_spark_60_values() -> None:
+    prices = _prices(_closes(100))
+
+    (ticker,) = build_overview({"AAPL": prices}, date(2026, 5, 27)).tickers
+
+    assert ticker.spark == [bar[4] for bar in prices.bars[-SPARK_LENGTH:]]
+    assert len(ticker.spark) == SPARK_LENGTH
+    assert ticker.last_close == prices.bars[-1][4]
+
+
+def test_overview_short_history_spark() -> None:
+    prices = _prices(_closes(7))
+
+    (ticker,) = build_overview({"AAPL": prices}, None).tickers
+
+    assert ticker.spark == [bar[4] for bar in prices.bars]
+
+
+def test_change_1d() -> None:
+    prices = _prices([200.0, 210.5])
+
+    (ticker,) = build_overview({"AAPL": prices}, None).tickers
+
+    assert ticker.change_1d == 0.0525  # 210.5 / 200 - 1, arrondi à 4 décimales (R14)
+
+
+def test_change_1d_rounded() -> None:
+    (ticker,) = build_overview({"AAPL": _prices([3.0, 4.0])}, None).tickers
+
+    assert ticker.change_1d == 0.3333
+
+
+def test_change_1d_null_single_bar() -> None:
+    (ticker,) = build_overview({"AAPL": _prices([123.45])}, None).tickers
+
+    assert ticker.change_1d is None
+    assert ticker.spark == [123.45]
+
+
+def test_overview_keeps_given_symbol_order() -> None:
+    prices = {
+        "MSFT": _prices(_closes(3), symbol="MSFT"),
+        "AAPL": _prices(_closes(3), symbol="AAPL"),
+        "SPY": _prices(_closes(3), symbol="SPY"),
+    }
+
+    overview = build_overview(prices, None)
+
+    assert [t.symbol for t in overview.tickers] == ["MSFT", "AAPL", "SPY"]
+
+
+def test_overview_m1_sections_empty() -> None:
+    overview = build_overview({"AAPL": _prices(_closes(3))}, date(2026, 1, 6))
+
+    assert overview.schema_version == 1
+    assert overview.data_as_of == date(2026, 1, 6)
+    assert overview.leaderboard == []
+    assert overview.latest_signals == []
+    assert overview.kpis.best_strategy_30d is None
+
+
+def test_overview_without_symbols() -> None:
+    overview = build_overview({}, None)
+
+    assert overview.tickers == []
+    assert overview.data_as_of is None
+
+
+def test_overview_refuses_empty_bars() -> None:
+    with pytest.raises(ValueError, match="aucune barre"):
+        build_overview({"AAPL": _prices([])}, None)
+
+
+def test_data_as_of_is_min_last_date() -> None:
+    """Définitions : date du symbole le plus en retard (vue prudente)."""
+    last_dates = {"AAPL": date(2026, 11, 23), "MSFT": date(2026, 11, 19), "SPY": date(2026, 11, 23)}
+
+    assert compute_data_as_of(last_dates) == date(2026, 11, 19)
+
+
+def test_data_as_of_null_without_files() -> None:
+    assert compute_data_as_of({}) is None
