@@ -31,7 +31,7 @@
 
 ## Stockage
 
-- [ ] **T3** Ajout générique d'une entrée au rapport de run — R7
+- [x] **T3** Ajout générique d'une entrée au rapport de run — R7
   - Tests : `tests/data/test_storage.py::test_append_entry_creates_report_with_validate_only`, `::test_append_validate_keeps_ingest_section`, `::test_append_ingest_keeps_validate_section`, `::test_ingest_only_report_bytes_unchanged_after_ingest_append` (pas de `"validate": []` ajouté), `::test_append_entry_refuses_other_session` et `::test_append_entry_refuses_unreadable_report` (`RunReportError`, fichier intact).
   - Fichiers : `src/tradinghelper/data/storage.py` (`ReportSection`, `append_run_report_entry` avec `by_alias=True, exclude_unset=True` ; `update_run_report` devient un appel à cette fonction).
   - Fini quand : nouveaux tests et tests existants de `update_run_report` verts ; qualité verte.

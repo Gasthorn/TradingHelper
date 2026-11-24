@@ -13,6 +13,7 @@ from tradinghelper.data import storage
 from tradinghelper.data.storage import (
     PricesFileError,
     RunReportError,
+    append_run_report_entry,
     atomic_write_json,
     atomic_write_text,
     data_dir,
@@ -31,6 +32,8 @@ from tradinghelper.schemas import (
     IngestTickerResult,
     PricesFile,
     RunReport,
+    ValidateRun,
+    ValidateViolation,
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "prices"
@@ -458,3 +461,112 @@ def test_update_report_refuses_corrupted_report(tmp_path: Path, content: bytes) 
 
     assert target.as_posix() in str(excinfo.value)
     assert target.read_bytes() == content
+
+
+# --- Ajout générique d'une entrée au rapport (F02 — R7) -----------------------------------------
+
+
+def _validate_run(exit_code: int = 0) -> ValidateRun:
+    violations = (
+        [ValidateViolation(symbol="AAPL", date=SESSION, rule="ohlc_inconsistent", detail="x")]
+        if exit_code
+        else []
+    )
+    return ValidateRun.model_validate(
+        {
+            "started_at": "2026-11-23T22:33:00Z",
+            "finished_at": "2026-11-23T22:33:01Z",
+            "duration_s": 1.0,
+            "args": {"symbols": None, "all_history": False},
+            "exit_code": exit_code,
+            "files_checked": 2,
+            "violations": [v.model_dump(mode="json") for v in violations],
+            "warnings": [],
+        }
+    )
+
+
+def test_append_entry_creates_report_with_validate_only(tmp_path: Path) -> None:
+    target = tmp_path / "runs" / "2026-11-23.json"
+
+    append_run_report_entry(target, SESSION, "validate", _validate_run(1))
+
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert list(data) == ["schema_version", "session_date", "validate"]
+    assert data["validate"][0]["exit_code"] == 1
+    assert _load_report(target).validate_ == [_validate_run(1)]
+
+
+def test_append_validate_keeps_ingest_section(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    update_run_report(target, SESSION, _run())
+    ingest_before = json.loads(target.read_text(encoding="utf-8"))["ingest"]
+
+    append_run_report_entry(target, SESSION, "validate", _validate_run())
+    append_run_report_entry(target, SESSION, "validate", _validate_run(1))
+
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert list(data) == ["schema_version", "session_date", "ingest", "validate"]
+    assert data["ingest"] == ingest_before
+    assert [run["exit_code"] for run in data["validate"]] == [0, 1]
+
+
+def test_append_ingest_keeps_validate_section(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    append_run_report_entry(target, SESSION, "validate", _validate_run())
+    validate_before = json.loads(target.read_text(encoding="utf-8"))["validate"]
+
+    append_run_report_entry(target, SESSION, "ingest", _run())
+
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert data["validate"] == validate_before
+    assert len(data["ingest"]) == 1
+    assert "validate_" not in data
+
+
+def test_ingest_only_report_bytes_unchanged_after_ingest_append(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    update_run_report(target, SESSION, _run(31, "AAPL"))
+    before = json.loads(target.read_text(encoding="utf-8"))
+
+    append_run_report_entry(target, SESSION, "ingest", _run(45, "MSFT"))
+
+    after = json.loads(target.read_text(encoding="utf-8"))
+    expected = {**before, "ingest": [*before["ingest"], _run(45, "MSFT").model_dump(mode="json")]}
+    assert after == expected
+    assert target.read_text(encoding="utf-8") == json.dumps(expected, indent=2) + "\n"
+
+
+def test_append_entry_refuses_other_session(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+    append_run_report_entry(target, SESSION, "validate", _validate_run())
+    before = target.read_bytes()
+
+    with pytest.raises(RunReportError, match="2026-11-24"):
+        append_run_report_entry(target, date(2026, 11, 24), "validate", _validate_run())
+
+    assert target.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"{tronqu", b'{"schema_version": 1, "session_date": "2026-11-23", "validate": [{}]}'],
+    ids=["JSON invalide", "section validate non conforme"],
+)
+def test_append_entry_refuses_unreadable_report(tmp_path: Path, content: bytes) -> None:
+    target = tmp_path / "2026-11-23.json"
+    target.write_bytes(content)
+
+    with pytest.raises(RunReportError):
+        append_run_report_entry(target, SESSION, "validate", _validate_run())
+
+    assert target.read_bytes() == content
+
+
+def test_append_entry_rejects_mismatched_section(tmp_path: Path) -> None:
+    target = tmp_path / "2026-11-23.json"
+
+    with pytest.raises(TypeError):
+        append_run_report_entry(target, SESSION, "ingest", _validate_run())
+
+    assert not target.exists()

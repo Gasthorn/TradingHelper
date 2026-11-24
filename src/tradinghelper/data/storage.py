@@ -14,11 +14,12 @@ import tempfile
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Final, Literal
 
 from pydantic import JsonValue, ValidationError
 
 from tradinghelper.config import find_repo_root
-from tradinghelper.schemas import PRICE_COLUMNS, Bar, IngestRun, PricesFile, RunReport
+from tradinghelper.schemas import PRICE_COLUMNS, Bar, IngestRun, PricesFile, RunReport, ValidateRun
 
 ENCODING = "utf-8"
 
@@ -175,13 +176,33 @@ class RunReportError(Exception):
         super().__init__(f"{path.as_posix()}: {reason}")
 
 
-def update_run_report(path: Path, session: date, run: IngestRun) -> None:
-    """Ajoute `run` à la section `ingest` du rapport de la séance `session` (F01 R15).
+type ReportSection = Literal["ingest", "validate"]
 
-    Le fichier est créé s'il n'existe pas. Les autres sections (ex. `validate`, F02) sont
-    conservées telles quelles. Un rapport existant illisible, non conforme ou d'une autre
-    séance n'est jamais écrasé (P7) : `RunReportError`. Écriture atomique.
+# Type d'entrée attendu par section : une entrée n'est jamais rangée dans la mauvaise section.
+_SECTION_ENTRY: Final[dict[str, type[IngestRun | ValidateRun]]] = {
+    "ingest": IngestRun,
+    "validate": ValidateRun,
+}
+
+
+def update_run_report(path: Path, session: date, run: IngestRun) -> None:
+    """Ajoute `run` à la section `ingest` du rapport de la séance `session` (F01 R15)."""
+    append_run_report_entry(path, session, "ingest", run)
+
+
+def append_run_report_entry(
+    path: Path, session: date, section: ReportSection, entry: IngestRun | ValidateRun
+) -> None:
+    """Ajoute `entry` à la liste `section` du rapport de la séance `session` (F01 R15, F02 R7).
+
+    Le fichier est créé s'il n'existe pas, avec la seule section concernée. Les autres sections
+    sont conservées telles quelles ; une section absente du fichier n'y est pas ajoutée vide.
+    Un rapport existant illisible, non conforme ou d'une autre séance n'est jamais écrasé (P7) :
+    `RunReportError`. Écriture atomique.
     """
+    expected = _SECTION_ENTRY[section]
+    if not isinstance(entry, expected):
+        raise TypeError(f"section `{section}` : {expected.__name__} attendu")
     try:
         raw = path.read_bytes()
     except FileNotFoundError:
@@ -193,7 +214,6 @@ def update_run_report(path: Path, session: date, run: IngestRun) -> None:
         current: dict[str, JsonValue] = {
             "schema_version": 1,
             "session_date": session.isoformat(),
-            "ingest": [],
         }
     else:
         try:
@@ -209,10 +229,10 @@ def update_run_report(path: Path, session: date, run: IngestRun) -> None:
         # Clé JSON `validate` (alias) ; une section absente du fichier n'y est pas ajoutée.
         current = existing.model_dump(mode="json", by_alias=True, exclude_unset=True)
 
-    ingest = current.get("ingest")
-    runs = list(ingest) if isinstance(ingest, list) else []
-    runs.append(run.model_dump(mode="json"))
-    current["ingest"] = runs
+    previous = current.get(section)
+    entries = list(previous) if isinstance(previous, list) else []
+    entries.append(entry.model_dump(mode="json"))
+    current[section] = entries
     # Validation du résultat avant écriture : on n'écrit jamais un rapport hors contrat.
     RunReport.model_validate(current)
     atomic_write_json(path, current)
