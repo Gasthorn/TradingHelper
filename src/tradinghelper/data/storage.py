@@ -37,9 +37,14 @@ def data_dir() -> Path:
     return find_repo_root() / "data"
 
 
+def prices_dir(root: Path) -> Path:
+    """`{root}/raw/prices` : dossier des fichiers de prix bruts."""
+    return root / "raw" / "prices"
+
+
 def prices_path(root: Path, symbol: str) -> Path:
     """`{root}/raw/prices/{SYMBOL}.json` — nom de fichier = symbole de config (F01 R12)."""
-    return root / "raw" / "prices" / f"{symbol}.json"
+    return prices_dir(root) / f"{symbol}.json"
 
 
 def run_report_path(root: Path, session: date) -> Path:

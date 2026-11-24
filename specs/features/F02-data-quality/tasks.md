@@ -86,7 +86,8 @@
   - Fichiers : `src/tradinghelper/data/validate.py` (`FileResult`, `validate_file`), `tests/data/test_validate.py`, `tests/fixtures/validate/invalid_json.json`, `tests/fixtures/validate/symbol_mismatch/MSFT.json`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T10** Validation d'un dossier — R3, R4, R5, R6
+- [x] **T10** Validation d'un dossier — R3, R4, R5, R6
+  - Note : `_targets` d'`ingest.py` est devenu `config.universe_targets` (comportement inchangé) ; `storage.prices_dir` ajouté.
   - Tests : `tests/data/test_validate.py::test_missing_file_warning` (symbole de l'univers et benchmark), `::test_no_prices_dir_exit_0`, `::test_orphan_stale_not_warned`, `::test_orphan_corrupted_is_violation`, `::test_symbols_option_skips_orphans`, `::test_late_ipo_no_missing_session`, `::test_jump_outside_window_needs_all_history`, `::test_results_sorted`, `::test_exit_code_reflects_violations`, `::test_raw_files_untouched` (empreintes SHA-256 avant et après).
   - Fichiers : `src/tradinghelper/data/validate.py` (`ValidateRequest`, `ValidateOutcome`, `validate`) ; si besoin, `_targets` d'`ingest.py` déplacé dans un module commun (sans changer son comportement).
   - Fini quand : tests verts, dont les tests existants d'`ingest` ; qualité verte.

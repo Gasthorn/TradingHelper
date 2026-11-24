@@ -6,14 +6,17 @@ Lecture seule : aucune fonction d'écriture de prix n'est appelée ici (R5).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from pydantic import JsonValue, ValidationError
 
+from tradinghelper.config import UniverseConfig, universe_targets
 from tradinghelper.data.calendar import NyseCalendar
 from tradinghelper.data.quality import (
+    RECENT_SESSIONS,
     STALE_SESSIONS,
     check_rows,
     large_moves,
@@ -21,11 +24,13 @@ from tradinghelper.data.quality import (
     stale,
     zero_volumes,
 )
-from tradinghelper.data.storage import PricesFileError, read_json
+from tradinghelper.data.storage import PricesFileError, price_files, prices_dir, read_json
 from tradinghelper.schemas import (
     Bar,
     BlockingRule,
     PricesFile,
+    ValidateArgs,
+    ValidateRun,
     ValidateViolation,
     ValidateWarning,
 )
@@ -158,3 +163,103 @@ def validate_file(
             all_history=all_history,
         )
     )
+
+
+# --- Validation d'un dossier (F02 R3 à R6) ------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ValidateRequest:
+    """Options de `th validate` (R5). `symbols` : déjà vérifiés par la CLI (univers, benchmark)."""
+
+    symbols: tuple[str, ...] | None = None
+    all_history: bool = False
+
+
+@dataclass(frozen=True)
+class ValidateOutcome:
+    """Résultat d'une validation : l'entrée `validate` du rapport et la séance `S`."""
+
+    run: ValidateRun
+    session: date
+
+    @property
+    def has_violations(self) -> bool:
+        return bool(self.run.violations)
+
+
+def _violation_key(violation: ValidateViolation) -> tuple[str, date, str]:
+    return (violation.symbol, violation.date or date.min, violation.rule)
+
+
+def _warning_key(warning: ValidateWarning) -> tuple[str, date, str]:
+    return (warning.symbol, warning.start or date.min, warning.rule)
+
+
+def validate(
+    universe: UniverseConfig,
+    request: ValidateRequest,
+    *,
+    calendar: NyseCalendar,
+    now: Callable[[], datetime],
+    data_root: Path,
+) -> ValidateOutcome:
+    """Valide les fichiers de prix de `data_root` (lecture seule) et assemble l'entrée `validate`.
+
+    - Symbole de l'univers ou benchmark : R1, R2 et avertissements R3 ; sans fichier :
+      `missing_file`.
+    - Fichier hors univers (orphelin) : R1 et R2 seulement (R4) ; ignoré avec `--symbols`.
+    - Résultats triés par (symbole, date, règle) ; `exit_code = 1` s'il y a une violation (R6).
+
+    N'écrit rien : l'écriture du rapport est décidée par la CLI (R7).
+    """
+    started = now()
+    session = calendar.last_closed_session(started)
+    recent_start = calendar.shift(session, -(RECENT_SESSIONS - 1))
+
+    targets = [symbol for symbol, _ in universe_targets(universe)]
+    if request.symbols is not None:
+        wanted = set(request.symbols)
+        targets = [symbol for symbol in targets if symbol in wanted]
+    files = price_files(prices_dir(data_root))
+
+    violations: list[ValidateViolation] = []
+    warnings: list[ValidateWarning] = []
+    checked = 0
+    for symbol, path in files.items():
+        in_universe = symbol in targets
+        if request.symbols is not None and not in_universe:
+            continue
+        result = validate_file(
+            symbol,
+            path,
+            session=session,
+            recent_start=recent_start,
+            calendar=calendar,
+            in_universe=in_universe,
+            all_history=request.all_history,
+        )
+        checked += 1
+        violations += result.violations
+        warnings += result.warnings
+    warnings += [
+        ValidateWarning(symbol=symbol, rule="missing_file", start=None, end=None)
+        for symbol in targets
+        if symbol not in files
+    ]
+
+    finished = now()
+    run = ValidateRun(
+        started_at=started,
+        finished_at=finished,
+        duration_s=max((finished - started).total_seconds(), 0.0),
+        args=ValidateArgs(
+            symbols=list(request.symbols) if request.symbols is not None else None,
+            all_history=request.all_history,
+        ),
+        exit_code=1 if violations else 0,
+        files_checked=checked,
+        violations=sorted(violations, key=_violation_key),
+        warnings=sorted(warnings, key=_warning_key),
+    )
+    return ValidateOutcome(run=run, session=session)

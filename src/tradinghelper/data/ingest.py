@@ -16,7 +16,7 @@ from functools import partial
 from pathlib import Path
 from typing import Final, Literal
 
-from tradinghelper.config import UniverseConfig
+from tradinghelper.config import UniverseConfig, universe_targets
 from tradinghelper.data.bars import (
     OVERLAP_SESSIONS,
     Cleaned,
@@ -107,14 +107,6 @@ def exit_code(results: Sequence[IngestTickerResult]) -> Literal[0, 1]:
 
 
 # --- Planification -----------------------------------------------------------------------------
-
-
-def _targets(universe: UniverseConfig) -> list[tuple[str, date]]:
-    """Tickers de l'univers puis benchmark (`start` = plus ancien `start`, R1), sans doublon."""
-    targets = [(t.symbol, t.start) for t in universe.tickers]
-    if universe.benchmark not in {symbol for symbol, _ in targets}:
-        targets.append((universe.benchmark, min(start for _, start in targets)))
-    return targets
 
 
 def _select(
@@ -395,7 +387,7 @@ def ingest(
 
     planned: list[_Plan | IngestTickerResult] = [
         run.plan(symbol, start, request)
-        for symbol, start in _select(_targets(universe), request.symbols)
+        for symbol, start in _select(universe_targets(universe), request.symbols)
     ]
     fetched = run.fetch([p for p in planned if isinstance(p, _Plan)])
     results = [run.process(p, fetched[p.symbol]) if isinstance(p, _Plan) else p for p in planned]
