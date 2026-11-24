@@ -211,7 +211,7 @@
 
 ## Documentation et contrôle réel
 
-- [ ] **T23** Documentation de `th export` — R1, R3, R5
+- [x] **T23** Documentation de `th export` — R1, R3, R5
   - Tests : `tests/test_repo_hygiene.py::test_readme_documents_export` (section `th export`, `--out`, codes de sortie,
     `npm run gen:types`), `::test_docs_list_export_modules` (`CLAUDE.md` liste `export/build.py` parmi les modules purs
     et `export/dashboard.py` parmi les modules à effets de bord ; `02-architecture.md` mentionne `export/build.py`).

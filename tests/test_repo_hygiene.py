@@ -473,3 +473,35 @@ def test_ci_dashboard_job_checks_generated_types() -> None:
 
     assert 'test -z "$(git status --porcelain -- src/types)"' in run
     assert _step_index("dashboard", "npm ci") < gen < _step_index("dashboard", "npm run typecheck")
+
+
+def test_readme_documents_export() -> None:
+    """F08 (T23) : commande `th export`, `--out`, codes de sortie, types TS générés."""
+    readme = _readme()
+
+    assert "### `th export`" in readme
+    for expected in (
+        "uv run th export",
+        "--out",
+        "dashboard/public/data",
+        "manifest.json",
+        "npm run gen:types",
+        "aucun fichier n'est écrit",
+    ):
+        assert expected in readme, expected
+    assert "arrivent avec les features F08" not in readme
+
+
+def test_docs_list_export_modules() -> None:
+    """F08 (plan, décision 6) : `export/build.py` pur, `export/dashboard.py` à effets de bord."""
+    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    architecture = (REPO_ROOT / "specs" / "02-architecture.md").read_text(encoding="utf-8")
+    pure, side_effects = next(
+        line for line in claude_md.splitlines() if line.startswith("- Fonctions pures")
+    ).split("effets de bord", 1)
+
+    assert "export/build.py" in pure
+    assert "export/dashboard.py" in side_effects
+    assert "uv run th export" in claude_md
+    assert "npm run gen:types" in claude_md
+    assert "build.py" in architecture
