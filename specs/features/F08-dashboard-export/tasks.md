@@ -174,7 +174,7 @@
 
 ## CLI
 
-- [ ] **T19** Commande `th export` — R1, R3, R11
+- [x] **T19** Commande `th export` — R1, R3, R11
   - Tests : `tests/test_cli_export.py::test_exports_to_default_out` (racine de dépôt temporaire),
     `::test_custom_out_and_data_dir` (`--out`, `TH_DATA_DIR`), `::test_summary_on_stdout` (fichiers, taille, plus gros
     fichier, `data_as_of`), `::test_corrupted_price_file_exits_1_and_names_file`, `::test_all_bad_sources_listed`,

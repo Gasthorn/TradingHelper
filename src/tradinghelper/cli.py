@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from collections import Counter
 from datetime import UTC, date, datetime
@@ -35,6 +36,13 @@ from tradinghelper.data.storage import (
 )
 from tradinghelper.data.validate import ValidateOutcome, ValidateRequest
 from tradinghelper.data.validate import validate as run_validate
+from tradinghelper.export.dashboard import (
+    ExportOutcome,
+    ExportSourceError,
+    ExportTargetError,
+    resolve_git_sha,
+)
+from tradinghelper.export.dashboard import export as run_export
 from tradinghelper.schemas import ValidateViolation, write_json_schemas
 
 # Commandes qui n'ont pas besoin d'une config valide.
@@ -295,3 +303,72 @@ def validate(
     else:
         typer.echo("Rien à signaler : aucun rapport écrit.")
     raise typer.Exit(code=outcome.run.exit_code)
+
+
+# --- th export (F08) ---------------------------------------------------------------------------
+
+DEFAULT_EXPORT_DIR = Path("dashboard") / "public" / "data"
+
+
+def _git_sha() -> str | None:
+    """Point d'injection (tests) : SHA git journalisé dans le manifest (R11)."""
+    return resolve_git_sha(os.environ, find_repo_root())
+
+
+def _kilobytes(size: int) -> str:
+    return f"{size / 1024:.1f} Ko"
+
+
+def _export_summary(outcome: ExportOutcome) -> list[str]:
+    total = sum(outcome.sizes.values())
+    biggest = max(outcome.sizes, key=lambda path: outcome.sizes[path])
+    as_of = outcome.data_as_of.isoformat() if outcome.data_as_of else "aucune donnée de prix"
+    return [
+        f"Export : {len(outcome.sizes)} fichier(s), {_kilobytes(total)} dans "
+        f"{outcome.out.as_posix()}",
+        f"Plus gros fichier : {biggest} ({_kilobytes(outcome.sizes[biggest])})",
+        f"Données à jour au : {as_of}",
+    ]
+
+
+@app.command()
+def export(
+    ctx: typer.Context,
+    out: Annotated[
+        Path | None,
+        typer.Option(
+            help="Dossier de sortie, reconstruit entièrement "
+            "(défaut : dashboard/public/data à la racine du dépôt)."
+        ),
+    ] = None,
+) -> None:
+    """Exporte les données pour le dashboard (JSON minifiés, contrat §7).
+
+    Lecture seule sur data/. Code 1 si un fichier source est illisible ou hors contrat (rien
+    n'est écrit), 2 en cas d'erreur de configuration ou d'un dossier de sortie refusé.
+    """
+    config: AppConfig = ctx.obj
+    repo_root = find_repo_root()
+    target = out if out is not None else repo_root / DEFAULT_EXPORT_DIR
+    try:
+        outcome = run_export(
+            config.universe,
+            data_root=data_dir(),
+            out=target,
+            repo_root=repo_root,
+            calendar=NyseCalendar(),
+            now=_now,
+            git_sha=_git_sha(),
+        )
+    except ExportTargetError as err:
+        raise _usage_error(f"dossier de sortie refusé : {err}") from None
+    except ExportSourceError as err:
+        for problem in err.problems:
+            typer.echo(str(problem), err=True)
+        typer.echo(
+            f"Export annulé : {len(err.problems)} source(s) invalide(s), aucun fichier écrit.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from None
+    for line in _export_summary(outcome):
+        typer.echo(line)
