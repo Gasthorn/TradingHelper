@@ -99,7 +99,7 @@
 
 ## CLI
 
-- [ ] **T12** Commande `th validate` : arguments, sorties, codes — R5, R6
+- [x] **T12** Commande `th validate` : arguments, sorties, codes — R5, R6
   - Tests : `tests/test_cli_validate.py::test_unknown_symbol_exits_2`, `::test_config_error_exits_2`, `::test_corrupted_fixture_exits_1_with_ticker_and_date` (fixture `duplicate_and_high_lt_low.json` : stderr contient les 2 violations `SYMBOL DATE rule`), `::test_jump_fixture_warns_exit_0` (fixture `jump_plus_60.json`), `::test_summary_on_stdout`, `::test_all_history_flag`.
   - Fichiers : `src/tradinghelper/cli.py` (commande `validate`, `_parse_symbols` extrait de `_parse_request`), `tests/test_cli_validate.py`, `tests/fixtures/validate/duplicate_and_high_lt_low.json`, `tests/fixtures/validate/jump_plus_60.json`.
   - Fini quand :
