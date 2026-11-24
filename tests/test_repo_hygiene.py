@@ -218,6 +218,39 @@ def test_indicators_module_is_pure() -> None:
     assert opens == []
 
 
+#: F08 (plan) : `export/build.py` construit les fichiers en mémoire, sans aucune E/S.
+BUILD_FORBIDDEN_IMPORTS = (
+    "os",
+    "pathlib",
+    "io",
+    "shutil",
+    "tempfile",
+    "subprocess",
+    "tradinghelper.data.storage",
+)
+
+
+@pytest.mark.parametrize("package", BUILD_FORBIDDEN_IMPORTS)
+def test_build_module_is_pure(package: str) -> None:
+    export_pkg = REPO_ROOT / "src" / "tradinghelper" / "export"
+    offenders = [loc for loc in _imports_of(export_pkg, package) if loc.startswith("build.py:")]
+
+    assert offenders == []
+
+
+def test_build_module_never_opens_files() -> None:
+    path = REPO_ROOT / "src" / "tradinghelper" / "export" / "build.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    calls = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"
+    ]
+
+    assert path.is_file()
+    assert calls == []
+
+
 def test_imports_of_detects_violation(tmp_path: Path) -> None:
     """Garde-fou du détecteur : un import interdit est bien trouvé (absolu, `from`, sous-module)."""
     (tmp_path / "a.py").write_text("import pandas as pd\n", encoding="utf-8")

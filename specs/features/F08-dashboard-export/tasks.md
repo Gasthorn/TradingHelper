@@ -80,7 +80,7 @@
 
 ## Construction pure (`export/build.py`)
 
-- [ ] **T9** Rendu minifié, empreinte et arrondi — R14, R15
+- [x] **T9** Rendu minifié, empreinte et arrondi — R14, R15
   - Tests : `tests/export/test_build.py::test_render_is_minified_utf8` (aucun espace hors chaînes, `é` non échappé),
     `::test_render_refuses_nan`, `::test_render_uses_json_aliases` (`validate`), `::test_digest_is_16_hex_of_sha256`,
     `::test_rounded_nan_to_none`, `::test_rounded_decimals[4|2]`, `::test_rounded_returns_python_floats`.
