@@ -105,7 +105,7 @@
   - Fichiers : `src/tradinghelper/export/build.py` (`compute_data_as_of`, `build_overview`), `tests/export/test_build.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T12** Santé — R12
+- [x] **T12** Santé — R12
   - Tests : `test_build.py::test_health_missing_file_ticker` (`last_date` et `sessions_behind` nuls, `stale: true`),
     `::test_health_sessions_behind` (jour férié et demi-séance comptés correctement), `::test_health_stale_boundary[S-3→false|S-4→true]`,
     `::test_health_keeps_10_most_recent_runs_sorted` (12 rapports), `::test_health_summarises_last_execution_of_each_section`

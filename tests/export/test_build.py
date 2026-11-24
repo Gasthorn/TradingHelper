@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 from datetime import date
+from typing import Any
 
 import numpy as np
 import pytest
@@ -17,6 +18,7 @@ from tradinghelper.export.build import (
     PRICE_DECIMALS,
     RATIO_DECIMALS,
     RSI_DECIMALS,
+    build_health,
     build_overview,
     build_ticker,
     collect_markers,
@@ -27,12 +29,16 @@ from tradinghelper.export.build import (
 )
 from tradinghelper.features.indicators import bollinger, rsi_wilder, sma
 from tradinghelper.schemas import (
+    HEALTH_RUNS,
+    MAX_QUALITY_WARNINGS,
     PRICE_COLUMNS,
     SPARK_LENGTH,
     ExportMarker,
+    HealthFile,
     HealthRun,
     HealthValidate,
     PricesFile,
+    RunReport,
     SignalsFile,
     TickerSeries,
 )
@@ -387,3 +393,184 @@ def test_data_as_of_is_min_last_date() -> None:
 
 def test_data_as_of_null_without_files() -> None:
     assert compute_data_as_of({}) is None
+
+
+# --- Santé (T12) --------------------------------------------------------------------------------
+
+S = date(2026, 11, 24)  # mardi ; S - 3 séances = jeudi 19, S - 4 séances = mercredi 18
+
+
+def _ticker_result(symbol: str, status: str, *, rewritten: bool = False) -> dict[str, Any]:
+    return {
+        "symbol": symbol, "status": status,
+        "mode": "incremental" if status != "unchanged" else None,
+        "bars_added": 1 if status == "ok" else 0, "bars_revised": 0,
+        "history_rewritten": rewritten, "rewrite_reason": "revision" if rewritten else None,
+        "attempts": 1, "error": "HTTP 429" if status == "failed" else None,
+    }  # fmt: skip
+
+
+def _ingest_run(*tickers: dict[str, Any], exit_code: int = 0) -> dict[str, Any]:
+    return {
+        "started_at": "2026-11-24T22:31:02Z", "finished_at": "2026-11-24T22:32:10Z",
+        "duration_s": 68.0, "args": {"symbols": None, "full": False, "start": None},
+        "exit_code": exit_code, "tickers": list(tickers), "warnings": [],
+    }  # fmt: skip
+
+
+def _warning(i: int) -> dict[str, Any]:
+    day = CAL.shift(S, -(i % 5))
+    return {"symbol": "AAPL", "rule": "zero_volume", "start": day.isoformat(),
+            "end": day.isoformat(), "value": None}  # fmt: skip
+
+
+def _validate_run(*, warnings: int = 0, violations: int = 0) -> dict[str, Any]:
+    return {
+        "started_at": "2026-11-24T22:32:15Z", "finished_at": "2026-11-24T22:32:16Z",
+        "duration_s": 0.9, "args": {"symbols": None, "all_history": False},
+        "exit_code": 1 if violations else 0, "files_checked": 3,
+        "violations": [
+            {"symbol": "AAPL", "date": None, "rule": "schema", "detail": "x"}
+        ] * violations,
+        "warnings": [_warning(i) for i in range(warnings)],
+    }  # fmt: skip
+
+
+def _report(session: date, **sections: list[dict[str, Any]]) -> RunReport:
+    return RunReport.model_validate(
+        {"schema_version": 1, "session_date": session.isoformat(), **sections}
+    )
+
+
+def _health(
+    last_dates: dict[str, date],
+    reports: list[RunReport] | None = None,
+    targets: tuple[str, ...] = ("AAPL", "MSFT", "SPY"),
+) -> HealthFile:
+    return build_health(targets, last_dates, reports or [], session=S, calendar=CAL)
+
+
+def test_health_last_session_is_s() -> None:
+    health = _health({"AAPL": S})
+
+    assert health.last_session == S
+    assert health.schema_version == 1
+
+
+def test_health_tickers_follow_targets_order() -> None:
+    health = _health({"AAPL": S, "MSFT": S, "SPY": S}, targets=("SPY", "MSFT", "AAPL"))
+
+    assert [t.symbol for t in health.tickers] == ["SPY", "MSFT", "AAPL"]
+
+
+def test_health_missing_file_ticker() -> None:
+    """R12 : sans fichier, `last_date` et `sessions_behind` nuls, `stale: true`."""
+    health = _health({"AAPL": S, "SPY": S})
+
+    msft = next(t for t in health.tickers if t.symbol == "MSFT")
+    assert (msft.last_date, msft.sessions_behind, msft.stale) == (None, None, True)
+
+
+def test_health_up_to_date_ticker() -> None:
+    aapl = _health({"AAPL": S}).tickers[0]
+
+    assert (aapl.last_date, aapl.sessions_behind, aapl.stale) == (S, 0, False)
+
+
+def test_health_sessions_behind_skips_holiday() -> None:
+    """Thanksgiving (26/11) n'est pas une séance ; la demi-séance du 27/11 en est une."""
+    friday = date(2026, 11, 27)
+    health = build_health(("AAPL",), {"AAPL": date(2026, 11, 25)}, [], session=friday, calendar=CAL)
+
+    assert health.tickers[0].sessions_behind == 1
+    assert health.tickers[0].stale is False
+
+
+@pytest.mark.parametrize(
+    ("last_date", "behind", "stale"),
+    [(date(2026, 11, 19), 3, False), (date(2026, 11, 18), 4, True)],
+    ids=["S-3→false", "S-4→true"],
+)
+def test_health_stale_boundary(last_date: date, behind: int, stale: bool) -> None:
+    """Même définition que F02 : `stale` si `last_date < S - 3 séances`."""
+    aapl = _health({"AAPL": last_date}).tickers[0]
+
+    assert (aapl.sessions_behind, aapl.stale) == (behind, stale)
+
+
+def test_health_keeps_10_most_recent_runs_sorted() -> None:
+    sessions = [CAL.shift(S, -i) for i in range(12)]
+    reports = [_report(day, ingest=[_ingest_run()]) for day in reversed(sessions)]
+
+    health = _health({"AAPL": S}, reports)
+
+    assert [run.session_date for run in health.runs] == sessions[:HEALTH_RUNS]
+
+
+def test_health_summarises_last_execution_of_each_section() -> None:
+    first = _ingest_run(_ticker_result("AAPL", "failed"), exit_code=1)
+    last = _ingest_run(
+        _ticker_result("AAPL", "ok"),
+        _ticker_result("MSFT", "unchanged"),
+        _ticker_result("SPY", "failed"),
+    )
+
+    (run,) = _health({"AAPL": S}, [_report(S, ingest=[first, last])]).runs
+
+    assert run.ingest is not None
+    assert (run.ingest.exit_code, run.ingest.ok, run.ingest.unchanged, run.ingest.failed) == (
+        0, 1, 1, 1,
+    )  # fmt: skip
+    assert run.validate_ is None
+
+
+def test_health_summarises_validate_section() -> None:
+    report = _report(S, validate=[_validate_run(violations=1), _validate_run(warnings=2)])
+
+    (run,) = _health({"AAPL": S}, [report]).runs
+
+    assert run.ingest is None
+    assert run.validate_ is not None
+    assert (run.validate_.exit_code, run.validate_.violations, run.validate_.warnings) == (0, 0, 2)
+
+
+def test_health_history_rewritten_symbols() -> None:
+    ingest = _ingest_run(
+        _ticker_result("AAPL", "ok", rewritten=True),
+        _ticker_result("MSFT", "ok"),
+        _ticker_result("SPY", "ok", rewritten=True),
+    )
+
+    (run,) = _health({"AAPL": S}, [_report(S, ingest=[ingest])]).runs
+
+    assert run.ingest is not None
+    assert run.ingest.history_rewritten == ["AAPL", "SPY"]
+
+
+def test_health_quality_warnings_from_latest_validate() -> None:
+    """Le rapport le plus récent sans section `validate` est sauté."""
+    reports = [
+        _report(CAL.shift(S, -1), validate=[_validate_run(warnings=1), _validate_run(warnings=3)]),
+        _report(S, ingest=[_ingest_run()]),
+        _report(CAL.shift(S, -2), validate=[_validate_run(warnings=5)]),
+    ]
+
+    health = _health({"AAPL": S}, reports)
+
+    assert len(health.quality_warnings) == 3
+    assert health.quality_warnings_truncated == 0
+
+
+def test_health_quality_warnings_truncated_at_100() -> None:
+    health = _health({"AAPL": S}, [_report(S, validate=[_validate_run(warnings=150)])])
+
+    assert len(health.quality_warnings) == MAX_QUALITY_WARNINGS
+    assert health.quality_warnings_truncated == 50
+
+
+def test_health_without_reports() -> None:
+    health = _health({"AAPL": S})
+
+    assert health.runs == []
+    assert health.quality_warnings == []
+    assert health.quality_warnings_truncated == 0

@@ -9,26 +9,39 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
-from datetime import date
+from datetime import date, timedelta
 from typing import Final
 
 import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel
 
+from tradinghelper.data.calendar import NyseCalendar
+from tradinghelper.data.quality import STALE_SESSIONS
 from tradinghelper.features.indicators import bollinger, rsi_wilder, sma
 from tradinghelper.schemas import (
+    HEALTH_RUNS,
+    MAX_QUALITY_WARNINGS,
     SPARK_LENGTH,
     ExportMarker,
+    HealthFile,
+    HealthIngest,
+    HealthRun,
+    HealthTicker,
+    HealthValidate,
+    IngestRun,
     Kpis,
     OverviewFile,
     OverviewTicker,
     PricesFile,
+    RunReport,
     SignalsFile,
     TickerFile,
     TickerSeries,
+    ValidateRun,
 )
 
 # Grille d'arrondi (spec F08, Définitions ; R14).
@@ -149,4 +162,71 @@ def build_overview(prices: Mapping[str, PricesFile], data_as_of: date | None) ->
         leaderboard=[],
         latest_signals=[],
         kpis=Kpis(best_strategy_30d=None),
+    )
+
+
+# --- Santé (R12) -------------------------------------------------------------------------------
+
+
+def _health_ticker(
+    symbol: str, last_date: date | None, *, session: date, calendar: NyseCalendar
+) -> HealthTicker:
+    if last_date is None:
+        return HealthTicker(symbol=symbol, last_date=None, sessions_behind=None, stale=True)
+    # Comme F02 (`validate`) : séances après `last_date` jusqu'à `S` incluse ; seuil S - 3 séances.
+    behind = len(calendar.sessions(last_date + timedelta(days=1), session))
+    threshold = calendar.shift(session, -STALE_SESSIONS)
+    return HealthTicker(
+        symbol=symbol, last_date=last_date, sessions_behind=behind, stale=last_date < threshold
+    )
+
+
+def _ingest_summary(run: IngestRun) -> HealthIngest:
+    statuses = Counter(result.status for result in run.tickers)
+    return HealthIngest(
+        exit_code=run.exit_code,
+        ok=statuses["ok"],
+        unchanged=statuses["unchanged"],
+        failed=statuses["failed"],
+        history_rewritten=[result.symbol for result in run.tickers if result.history_rewritten],
+    )
+
+
+def _validate_summary(run: ValidateRun) -> HealthValidate:
+    return HealthValidate(
+        exit_code=run.exit_code, violations=len(run.violations), warnings=len(run.warnings)
+    )
+
+
+def build_health(
+    targets: Sequence[str],
+    last_dates: Mapping[str, date],
+    reports: Sequence[RunReport],
+    *,
+    session: date,
+    calendar: NyseCalendar,
+) -> HealthFile:
+    """`health.json` (R12) : fraîcheur de chaque cible (univers + benchmark, dans l'ordre reçu),
+    résumé des `HEALTH_RUNS` rapports les plus récents (dernière exécution de chaque section) et
+    avertissements de la dernière exécution `validate` du rapport le plus récent qui en a une."""
+    recent = sorted(reports, key=lambda report: report.session_date, reverse=True)[:HEALTH_RUNS]
+    runs = [
+        HealthRun(
+            session_date=report.session_date,
+            ingest=_ingest_summary(report.ingest[-1]) if report.ingest else None,
+            validate_=_validate_summary(report.validate_[-1]) if report.validate_ else None,
+        )
+        for report in recent
+    ]
+    warnings = next((report.validate_[-1].warnings for report in recent if report.validate_), [])
+    return HealthFile(
+        schema_version=1,
+        last_session=session,
+        tickers=[
+            _health_ticker(symbol, last_dates.get(symbol), session=session, calendar=calendar)
+            for symbol in targets
+        ],
+        runs=runs,
+        quality_warnings=warnings[:MAX_QUALITY_WARNINGS],
+        quality_warnings_truncated=max(0, len(warnings) - MAX_QUALITY_WARNINGS),
     )
