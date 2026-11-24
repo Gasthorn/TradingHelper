@@ -5,16 +5,20 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from fakes import FakePriceSource, make_bars
 from tradinghelper.config import UniverseConfig
 from tradinghelper.data import validate as validate_mod
 from tradinghelper.data.calendar import NyseCalendar
+from tradinghelper.data.ingest import IngestRequest, ingest
 from tradinghelper.data.quality import RECENT_SESSIONS, RowCheck
+from tradinghelper.data.source import RawBar
 from tradinghelper.data.storage import dumps_prices
 from tradinghelper.data.validate import (
     FileResult,
@@ -445,3 +449,56 @@ def test_raw_files_untouched(tmp_path: Path) -> None:
     after = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in directory.iterdir()}
     assert after == before
     assert not (tmp_path / "runs").exists()  # aucun rapport écrit par `validate()` (c'est la CLI)
+
+
+# --- Test croisé F01 ↔ F02 (T11 : R2) ----------------------------------------------------------
+
+
+def test_file_written_by_ingest_has_no_violation(tmp_path: Path) -> None:
+    """Un fichier écrit par `ingest` (F01 R6) respecte toujours les règles bloquantes (F02 R2),
+    même à partir d'une réponse « sale » de la source."""
+    history = {
+        symbol: make_bars(CAL, date(2026, 1, 2), date(2026, 12, 31), base=100.0 + 50 * i)
+        for i, symbol in enumerate(("AAPL", "MSFT", "SPY"))
+    }
+    d1120, d1123 = date(2026, 11, 20), date(2026, 11, 23)
+    valid_1123 = next(b for b in history["AAPL"] if b.date == d1123)
+    dirty = [
+        RawBar(date(2026, 11, 22), 1.0, 2.0, 0.5, 1.5, 1.5, 10.0),  # dimanche
+        RawBar(date(2026, 11, 19), 1.0, float("nan"), 0.5, 1.5, 1.5, 10.0),  # NaN (doublon)
+        RawBar(d1120, 10.0, 9.0, 9.5, 9.8, 9.7, 10.0),  # high < low (doublon)
+        RawBar(date(2026, 11, 18), -1.0, 2.0, 0.5, 1.5, 1.5, 10.0),  # prix négatif (doublon)
+        RawBar(date(2026, 11, 17), 1.0, 2.0, 0.5, 1.5, 1.5, -3.0),  # volume négatif (doublon)
+        RawBar(date(2026, 11, 25), 1.0, 2.0, 0.5, 1.5, 1.5, 10.0),  # après S
+        replace(
+            valid_1123, volume=0.0, close=valid_1123.close + 0.123456
+        ),  # volume nul, non arrondi
+    ]
+    source = FakePriceSource(history, extra={"AAPL": dirty})
+
+    ingested = ingest(
+        UNIVERSE,
+        IngestRequest(),
+        source=source,
+        calendar=CAL,
+        now=lambda: NOW,
+        sleep=lambda _: None,
+        data_root=tmp_path,
+    )
+    outcome = _run_validate(tmp_path, all_history=True)
+
+    assert {w.rule for w in ingested.run.warnings} >= {
+        "nan",
+        "non_session_date",
+        "after_last_session",
+        "non_positive_price",
+        "negative_volume",
+        "ohlc_inconsistent",
+        "duplicate_date",
+    }
+    assert outcome.run.violations == []
+    assert outcome.run.exit_code == 0
+    assert outcome.run.files_checked == 3
+    assert ("AAPL", "zero_volume", d1123) in [
+        (w.symbol, w.rule, w.start) for w in outcome.run.warnings
+    ]

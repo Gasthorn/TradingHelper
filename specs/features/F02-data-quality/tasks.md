@@ -92,7 +92,7 @@
   - Fichiers : `src/tradinghelper/data/validate.py` (`ValidateRequest`, `ValidateOutcome`, `validate`) ; si besoin, `_targets` d'`ingest.py` déplacé dans un module commun (sans changer son comportement).
   - Fini quand : tests verts, dont les tests existants d'`ingest` ; qualité verte.
 
-- [ ] **T11** Test croisé F01 ↔ F02 — R2
+- [x] **T11** Test croisé F01 ↔ F02 — R2
   - Tests : `tests/data/test_validate.py::test_file_written_by_ingest_has_no_violation`. `ingest` est lancé avec une `FakePriceSource` qui renvoie une réponse « sale » (NaN, week-end, doublon, `high < low`, volume nul, barre après `S`), puis `validate` sur le même dossier : 0 violation, avertissement `zero_volume` présent.
   - Fichiers : `tests/data/test_validate.py`.
   - Fini quand : test vert. S'il échoue, s'arrêter : c'est une divergence entre F01 R6 et F02 R2, à traiter par une modification de spec.
