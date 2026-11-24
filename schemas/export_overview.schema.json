@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ExportSignal": {
+      "additionalProperties": false,
+      "description": "Signal du §4 enrichi du modèle qui l'a produit et de sa performance historique (M3, P8).",
+      "properties": {
+        "strategy_id": {
+          "title": "Strategy Id",
+          "type": "string"
+        },
+        "symbol": {
+          "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "BUY",
+            "HOLD",
+            "SELL"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "target_weight": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Target Weight",
+          "type": "number"
+        },
+        "horizon_days": {
+          "exclusiveMinimum": 0,
+          "title": "Horizon Days",
+          "type": "integer"
+        },
+        "explanation": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FeatureContribution"
+              },
+              "maxItems": 5,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Explanation"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model Id"
+        },
+        "sharpe_oos": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sharpe Oos"
+        }
+      },
+      "required": [
+        "strategy_id",
+        "symbol",
+        "action",
+        "confidence",
+        "target_weight",
+        "horizon_days",
+        "model_id",
+        "sharpe_oos"
+      ],
+      "title": "ExportSignal",
+      "type": "object"
+    },
+    "FeatureContribution": {
+      "additionalProperties": false,
+      "description": "Contribution d'une feature à la prédiction (SHAP / gain).",
+      "properties": {
+        "feature": {
+          "title": "Feature",
+          "type": "string"
+        },
+        "contribution": {
+          "title": "Contribution",
+          "type": "number"
+        }
+      },
+      "required": [
+        "feature",
+        "contribution"
+      ],
+      "title": "FeatureContribution",
+      "type": "object"
+    },
+    "Kpis": {
+      "additionalProperties": false,
+      "description": "Indicateurs clés de l'accueil (M3, R16).",
+      "properties": {
+        "best_strategy_30d": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Best Strategy 30D"
+        }
+      },
+      "required": [
+        "best_strategy_30d"
+      ],
+      "title": "Kpis",
+      "type": "object"
+    },
+    "LeaderboardRow": {
+      "additionalProperties": false,
+      "description": "Ligne du classement des stratégies (M3, R16) ; baselines toujours présentes (P3).",
+      "properties": {
+        "strategy_id": {
+          "title": "Strategy Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "baseline",
+            "model"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "equity": {
+          "title": "Equity",
+          "type": "number"
+        },
+        "return_30d": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Return 30D"
+        },
+        "sharpe_oos": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sharpe Oos"
+        },
+        "random_percentile": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Random Percentile"
+        }
+      },
+      "required": [
+        "strategy_id",
+        "kind",
+        "equity",
+        "return_30d",
+        "sharpe_oos",
+        "random_percentile"
+      ],
+      "title": "LeaderboardRow",
+      "type": "object"
+    },
+    "OverviewTicker": {
+      "additionalProperties": false,
+      "description": "Résumé d'un symbole pour la page d'accueil (R10).",
+      "properties": {
+        "symbol": {
+          "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "last_close": {
+          "title": "Last Close",
+          "type": "number"
+        },
+        "change_1d": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Change 1D"
+        },
+        "spark": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 60,
+          "title": "Spark",
+          "type": "array"
+        }
+      },
+      "required": [
+        "symbol",
+        "last_close",
+        "change_1d",
+        "spark"
+      ],
+      "title": "OverviewTicker",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`overview.json` (R10, R16).",
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "data_as_of": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Data As Of"
+    },
+    "tickers": {
+      "items": {
+        "$ref": "#/$defs/OverviewTicker"
+      },
+      "title": "Tickers",
+      "type": "array"
+    },
+    "leaderboard": {
+      "items": {
+        "$ref": "#/$defs/LeaderboardRow"
+      },
+      "title": "Leaderboard",
+      "type": "array"
+    },
+    "latest_signals": {
+      "items": {
+        "$ref": "#/$defs/ExportSignal"
+      },
+      "title": "Latest Signals",
+      "type": "array"
+    },
+    "kpis": {
+      "$ref": "#/$defs/Kpis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "data_as_of",
+    "tickers",
+    "leaderboard",
+    "latest_signals",
+    "kpis"
+  ],
+  "title": "OverviewFile",
+  "type": "object"
+}

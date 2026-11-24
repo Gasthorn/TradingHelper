@@ -507,11 +507,46 @@ def test_run_report_requires_schema_version_and_session_date() -> None:
 
 # --- Génération des JSON Schemas (`th schemas`) -------------------------------------------------
 
-EXPECTED_SCHEMA_FILES = ["prices.schema.json", "run_report.schema.json"]
+EXPECTED_SCHEMA_FILES = [
+    "export_health.schema.json",
+    "export_manifest.schema.json",
+    "export_overview.schema.json",
+    "export_ticker.schema.json",
+    "prices.schema.json",
+    "run_report.schema.json",
+    "signals.schema.json",
+]
 
 
 def test_schema_models_registry() -> None:
-    assert {"prices": PricesFile, "run_report": RunReport} == SCHEMA_MODELS
+    assert {"prices": PricesFile, "run_report": RunReport}.items() <= SCHEMA_MODELS.items()
+
+
+def test_schema_models_include_export_and_signals() -> None:
+    """F08 R4 : contrats §4 (signaux) et §7 (export) générés par `th schemas`."""
+    assert {
+        "signals": SignalsFile,
+        "export_manifest": ManifestFile,
+        "export_ticker": TickerFile,
+        "export_overview": OverviewFile,
+        "export_health": HealthFile,
+    }.items() <= SCHEMA_MODELS.items()
+    assert sorted(f"{name}.schema.json" for name in SCHEMA_MODELS) == EXPECTED_SCHEMA_FILES
+
+
+def test_no_stale_committed_schema() -> None:
+    """Chaque fichier de `schemas/` correspond à un modèle (aucun schéma orphelin)."""
+    committed = sorted(path.name for path in (REPO_ROOT / "schemas").glob("*.schema.json"))
+
+    assert committed == EXPECTED_SCHEMA_FILES
+
+
+def test_health_schema_uses_validate_alias() -> None:
+    """Le JSON Schema expose la clé `validate` (alias), que les types TS reprendront."""
+    schema = json.loads(render_json_schemas()["export_health.schema.json"])
+
+    assert "validate" in schema["$defs"]["HealthRun"]["properties"]
+    assert "validate_" not in json.dumps(schema)
 
 
 def test_render_json_schemas_format() -> None:

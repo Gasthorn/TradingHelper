@@ -71,7 +71,7 @@
     `HealthTicker`, `HealthIngest`, `HealthValidate`, `HealthRun`, `HealthFile`), `tests/test_schemas.py`.
   - Fini quand : tests verts ; `pytest -W error::UserWarning tests/test_schemas.py` vert ; qualité verte.
 
-- [ ] **T8** Génération des JSON Schemas — R4
+- [x] **T8** Génération des JSON Schemas — R4
   - Tests : `test_schemas.py::test_generated_schemas_match_committed` (existant, couvre les nouveaux fichiers),
     `::test_schema_models_include_export_and_signals` (noms `signals`, `export_manifest`, `export_ticker`,
     `export_overview`, `export_health`).

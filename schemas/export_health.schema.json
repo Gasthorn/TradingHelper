@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "HealthIngest": {
+      "additionalProperties": false,
+      "description": "Résumé de la dernière exécution `ingest` d'un rapport de run.",
+      "properties": {
+        "exit_code": {
+          "enum": [
+            0,
+            1
+          ],
+          "title": "Exit Code",
+          "type": "integer"
+        },
+        "ok": {
+          "minimum": 0,
+          "title": "Ok",
+          "type": "integer"
+        },
+        "unchanged": {
+          "minimum": 0,
+          "title": "Unchanged",
+          "type": "integer"
+        },
+        "failed": {
+          "minimum": 0,
+          "title": "Failed",
+          "type": "integer"
+        },
+        "history_rewritten": {
+          "items": {
+            "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+            "type": "string"
+          },
+          "title": "History Rewritten",
+          "type": "array"
+        }
+      },
+      "required": [
+        "exit_code",
+        "ok",
+        "unchanged",
+        "failed",
+        "history_rewritten"
+      ],
+      "title": "HealthIngest",
+      "type": "object"
+    },
+    "HealthRun": {
+      "additionalProperties": false,
+      "description": "Résumé d'un rapport de run ; section absente → `null`. Sérialiser avec `by_alias=True`.",
+      "properties": {
+        "session_date": {
+          "format": "date",
+          "title": "Session Date",
+          "type": "string"
+        },
+        "ingest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HealthIngest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HealthValidate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "session_date",
+        "ingest",
+        "validate"
+      ],
+      "title": "HealthRun",
+      "type": "object"
+    },
+    "HealthTicker": {
+      "additionalProperties": false,
+      "description": "Fraîcheur d'un symbole de l'univers ou du benchmark (R12).",
+      "properties": {
+        "symbol": {
+          "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "last_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Date"
+        },
+        "sessions_behind": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sessions Behind"
+        },
+        "stale": {
+          "title": "Stale",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "symbol",
+        "last_date",
+        "sessions_behind",
+        "stale"
+      ],
+      "title": "HealthTicker",
+      "type": "object"
+    },
+    "HealthValidate": {
+      "additionalProperties": false,
+      "description": "Résumé de la dernière exécution `validate` d'un rapport de run.",
+      "properties": {
+        "exit_code": {
+          "enum": [
+            0,
+            1
+          ],
+          "title": "Exit Code",
+          "type": "integer"
+        },
+        "violations": {
+          "minimum": 0,
+          "title": "Violations",
+          "type": "integer"
+        },
+        "warnings": {
+          "minimum": 0,
+          "title": "Warnings",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "exit_code",
+        "violations",
+        "warnings"
+      ],
+      "title": "HealthValidate",
+      "type": "object"
+    },
+    "ValidateWarning": {
+      "additionalProperties": false,
+      "description": "Anomalie non bloquante (F02 R3), sur une barre (`start == end`) ou une plage de séances.\n\n`value` : variation simple pour `large_move`, nombre de séances pour `missing_session`\net `stale` ; absente sinon.",
+      "properties": {
+        "symbol": {
+          "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "rule": {
+          "enum": [
+            "missing_session",
+            "large_move",
+            "zero_volume",
+            "stale",
+            "missing_file"
+          ],
+          "title": "Rule",
+          "type": "string"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Start"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "End"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "symbol",
+        "rule",
+        "start",
+        "end"
+      ],
+      "title": "ValidateWarning",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`health.json` (R12).",
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "last_session": {
+      "format": "date",
+      "title": "Last Session",
+      "type": "string"
+    },
+    "tickers": {
+      "items": {
+        "$ref": "#/$defs/HealthTicker"
+      },
+      "title": "Tickers",
+      "type": "array"
+    },
+    "runs": {
+      "items": {
+        "$ref": "#/$defs/HealthRun"
+      },
+      "maxItems": 10,
+      "title": "Runs",
+      "type": "array"
+    },
+    "quality_warnings": {
+      "items": {
+        "$ref": "#/$defs/ValidateWarning"
+      },
+      "maxItems": 100,
+      "title": "Quality Warnings",
+      "type": "array"
+    },
+    "quality_warnings_truncated": {
+      "minimum": 0,
+      "title": "Quality Warnings Truncated",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "last_session",
+    "tickers",
+    "runs",
+    "quality_warnings",
+    "quality_warnings_truncated"
+  ],
+  "title": "HealthFile",
+  "type": "object"
+}

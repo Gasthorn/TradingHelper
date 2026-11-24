@@ -580,6 +580,11 @@ JSON_SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
 SCHEMA_MODELS: Final[dict[str, type[BaseModel]]] = {
     "prices": PricesFile,
     "run_report": RunReport,
+    "signals": SignalsFile,
+    "export_manifest": ManifestFile,
+    "export_ticker": TickerFile,
+    "export_overview": OverviewFile,
+    "export_health": HealthFile,
 }
 
 
