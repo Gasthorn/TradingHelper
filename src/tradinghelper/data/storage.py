@@ -117,19 +117,46 @@ class PricesFileError(Exception):
         super().__init__(f"{path.as_posix()}: {reason}")
 
 
+def price_files(prices_dir: Path) -> dict[str, Path]:
+    """Fichiers de prix de `prices_dir`, par symbole (nom sans `.json`), triés (F02 R1).
+
+    Seuls les fichiers `*.json` non cachés comptent : les temporaires d'écriture atomique
+    (`.X.json.….tmp`) et tout autre fichier sont ignorés. Dossier absent : `{}`.
+    """
+    if not prices_dir.is_dir():
+        return {}
+    files = {
+        path.name.removesuffix(".json"): path
+        for path in prices_dir.iterdir()
+        if path.suffix == ".json" and not path.name.startswith(".") and path.is_file()
+    }
+    return dict(sorted(files.items()))
+
+
+def read_json(path: Path) -> JsonValue:
+    """Contenu JSON (UTF-8) de `path`, sans validation de contrat. `FileNotFoundError` si le
+    fichier n'existe pas ; `PricesFileError` s'il est illisible ou n'est pas du JSON valide.
+    Les littéraux `NaN` / `Infinity` sont acceptés : les règles de contenu les refusent."""
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        raise
+    except OSError as exc:
+        raise PricesFileError(path, f"fichier illisible ({exc.strerror})") from exc
+    try:
+        value: JsonValue = json.loads(raw.decode(ENCODING))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PricesFileError(path, f"JSON invalide ({exc})") from exc
+    return value
+
+
 def read_prices(path: Path) -> PricesFile | None:
     """Lit et valide un fichier de prix. `None` s'il n'existe pas ; `PricesFileError` s'il est
     illisible, n'est pas du JSON UTF-8 valide ou viole le contrat."""
     try:
-        raw = path.read_bytes()
+        data = read_json(path)
     except FileNotFoundError:
         return None
-    except OSError as exc:
-        raise PricesFileError(path, f"fichier illisible ({exc.strerror})") from exc
-    try:
-        data = json.loads(raw.decode(ENCODING))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise PricesFileError(path, f"JSON invalide ({exc})") from exc
     try:
         return PricesFile.model_validate(data)
     except ValidationError as exc:

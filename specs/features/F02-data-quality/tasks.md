@@ -36,7 +36,7 @@
   - Fichiers : `src/tradinghelper/data/storage.py` (`ReportSection`, `append_run_report_entry` avec `by_alias=True, exclude_unset=True` ; `update_run_report` devient un appel à cette fonction).
   - Fini quand : nouveaux tests et tests existants de `update_run_report` verts ; qualité verte.
 
-- [ ] **T4** [P] Liste des fichiers de prix et lecture JSON brute — R1, R5
+- [x] **T4** [P] Liste des fichiers de prix et lecture JSON brute — R1, R5
   - Tests : `tests/data/test_storage.py::test_price_files_lists_json_sorted`, `::test_price_files_ignores_tmp_hidden_and_non_json` (`.AAPL.json.abc.tmp`, `.hidden.json`, `notes.txt`), `::test_price_files_missing_dir_is_empty`, `::test_read_json_invalid_raises` (JSON invalide, UTF-8 invalide → `PricesFileError`), `::test_read_json_returns_value`.
   - Fichiers : `src/tradinghelper/data/storage.py` (`price_files`, `read_json`).
   - Fini quand : tests verts ; qualité verte.

@@ -570,3 +570,65 @@ def test_append_entry_rejects_mismatched_section(tmp_path: Path) -> None:
         append_run_report_entry(target, SESSION, "ingest", _validate_run())
 
     assert not target.exists()
+
+
+# --- Liste des fichiers de prix et lecture JSON brute (F02 — R1, R5) ----------------------------
+
+
+def test_price_files_lists_json_sorted(tmp_path: Path) -> None:
+    for name in ("SPY.json", "AAPL.json", "BRK.B.json"):
+        (tmp_path / name).write_text("{}", encoding="utf-8")
+
+    files = storage.price_files(tmp_path)
+
+    assert list(files) == ["AAPL", "BRK.B", "SPY"]
+    assert files["BRK.B"] == tmp_path / "BRK.B.json"
+
+
+def test_price_files_ignores_tmp_hidden_and_non_json(tmp_path: Path) -> None:
+    (tmp_path / "AAPL.json").write_text("{}", encoding="utf-8")
+    for name in (".AAPL.json.abc123.tmp", ".hidden.json", "notes.txt", "AAPL.json.bak"):
+        (tmp_path / name).write_text("x", encoding="utf-8")
+    (tmp_path / "sub.json").mkdir()
+
+    assert list(storage.price_files(tmp_path)) == ["AAPL"]
+
+
+def test_price_files_missing_dir_is_empty(tmp_path: Path) -> None:
+    assert storage.price_files(tmp_path / "absent") == {}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"{tronqu", b'{"a": "\xff"}', b""],
+    ids=["JSON invalide", "UTF-8 invalide", "vide"],
+)
+def test_read_json_invalid_raises(tmp_path: Path, content: bytes) -> None:
+    target = tmp_path / "AAPL.json"
+    target.write_bytes(content)
+
+    with pytest.raises(PricesFileError) as excinfo:
+        storage.read_json(target)
+
+    assert excinfo.value.path == target
+
+
+def test_read_json_returns_value(tmp_path: Path) -> None:
+    target = tmp_path / "AAPL.json"
+    target.write_text('{"symbol": "AAPL", "bars": [["2026-11-23", 1.5, 2]]}', encoding="utf-8")
+
+    assert storage.read_json(target) == {"symbol": "AAPL", "bars": [["2026-11-23", 1.5, 2]]}
+
+
+def test_read_json_keeps_nan_literal(tmp_path: Path) -> None:
+    """`NaN` est lu tel quel : c'est la règle `non_positive_price` qui le refuse (F02 R2)."""
+    target = tmp_path / "AAPL.json"
+    target.write_text('{"bars": [[NaN]]}', encoding="utf-8")
+
+    value = storage.read_json(target)
+
+    assert isinstance(value, dict)
+    bars = value["bars"]
+    assert isinstance(bars, list)
+    assert isinstance(bars[0], list)
+    assert bars[0][0] != bars[0][0]  # NaN
