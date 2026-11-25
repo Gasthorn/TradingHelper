@@ -154,7 +154,7 @@
     chaque symbole (`key`) ; `check:dist` exige `<title>` exactement « TradingHelper ». 18 tests e2e (dont 2 échecs
     attendus) ; vérifié dans le navigateur (`#/inconnu`, `#/ticker/brk.b` → `BRK.B`, aucune erreur console).
 
-- [ ] **T12** États de chargement, d'erreur et vide — R3, R4
+- [x] **T12** États de chargement, d'erreur et vide — R3, R4
   - Tests : `e2e/errors.spec.ts::manifest missing`, `::overview 404`, `::invalid json`, `::schema_version 2` (message
     nommant le fichier, bandeau et navigation visibles, aucune `pageerror`) ; `e2e/empty.spec.ts::empty fixture no
     data` (« Aucune donnée disponible »).
@@ -163,6 +163,11 @@
     plan « Risques »), `dashboard/src/App.tsx` (chargement du manifest), `dashboard/src/pages/Overview.tsx` (squelette :
     états chargement / erreur / aucune donnée).
   - Fini quand : e2e vert ; qualité dashboard verte.
+  - Fait (2026-11-25) : `useManifest` / `useFile` (résultat obsolète ignoré) ; erreur du manifest affichée sur
+    toutes les routes sauf « Page introuvable » ; `ErrorBoundary` par page (clé = route) ; ajout de
+    `components/Loading.tsx`. Cas couverts : manifest absent ou d'une autre version, `overview.json` absent,
+    illisible ou d'une autre version, navigation après erreur ; fixture `empty` sans autre requête que le
+    manifest. 26 tests e2e (dont 2 échecs attendus).
 
 - [ ] **T13** Date des données et alerte de fraîcheur — R6
   - Tests : `e2e/freshness.spec.ts` (`page.clock` figée, fixture `m1` à `data_as_of` 2026-11-23) : `::date shown on
