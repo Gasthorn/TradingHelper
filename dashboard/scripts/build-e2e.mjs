@@ -4,8 +4,11 @@
 import process from "node:process";
 import { build } from "vite";
 
+// `publicDir: false` : n'embarque pas un éventuel export local (public/data/). Les tests servent
+// leurs données par interception ; sans cela, une requête non interceptée réussirait en local
+// et échouerait en CI, où public/data/ n'existe pas.
 delete process.env.TH_DASHBOARD_BASE;
-await build({ logLevel: "warn" });
+await build({ logLevel: "warn", publicDir: false });
 
 process.env.TH_DASHBOARD_BASE = "/TradingHelper/";
-await build({ logLevel: "warn", build: { outDir: "dist-base", emptyOutDir: true } });
+await build({ logLevel: "warn", publicDir: false, build: { outDir: "dist-base", emptyOutDir: true } });

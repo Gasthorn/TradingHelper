@@ -1,6 +1,7 @@
 /** Page Ticker (spec F09 — R14–R18 en M1). Graphique lu via ses attributs data-* (décision 3 du plan). */
 import aapl from "../tests/fixtures/m1/tickers/AAPL.json" with { type: "json" };
 import aaplSignals from "../tests/fixtures/m1-signals/tickers/AAPL.json" with { type: "json" };
+import manifestSignals from "../tests/fixtures/m1-signals/manifest.json" with { type: "json" };
 import { periodWindow } from "../src/lib/series";
 import { expect, gotoRoute, test, useFixture } from "./support";
 
@@ -192,12 +193,9 @@ test.describe("marqueurs de signaux (R17, R8, P8)", () => {
 
   test("détail P8 : modèle et Sharpe OOS lus dans manifest.strategies", async ({ page }) => {
     await useFixture(page, "m1-signals");
-    await page.route("**/data/manifest.json*", async (route) => {
-      const response = await route.fetch();
-      const manifest = (await response.json()) as { strategies: unknown[] };
-      manifest.strategies = [{ id: "lgbm_dir5_v3", kind: "model", model_id: "lgbm_dir5_20261122_ab12cd", sharpe_oos: 1.1 }];
-      await route.fulfill({ response, json: manifest });
-    });
+    // Manifest de la fixture, complété d'une stratégie (pas de route.fetch : le serveur e2e n'a pas de données).
+    const strategies = [{ id: "lgbm_dir5_v3", kind: "model", model_id: "lgbm_dir5_20261122_ab12cd", sharpe_oos: 1.1 }];
+    await page.route("**/data/manifest.json*", (route) => route.fulfill({ json: { ...manifestSignals, strategies } }));
     await gotoRoute(page, "#/ticker/AAPL");
 
     const first = legend(page).getByRole("listitem").first();

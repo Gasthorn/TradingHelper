@@ -3,7 +3,7 @@
  * `prefers-color-scheme` en direct. Pose `data-theme` sur <html> (le script inline de
  * index.html le pose déjà avant le premier rendu).
  */
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useState } from "preact/hooks";
 
 import { THEME_KEY, type Theme, type ThemePreference, nextPreference, parsePreference, resolveTheme } from "../lib/theme";
 
@@ -47,7 +47,8 @@ export function useTheme(): ThemeState {
   }, []);
 
   const theme = resolveTheme(preference, prefersDark);
-  useEffect(() => {
+  // Avant l'affichage : le changement de thème ne passe pas par une image intermédiaire.
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 

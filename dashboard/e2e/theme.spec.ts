@@ -22,16 +22,16 @@ test("la bascule parcourt système → clair → sombre, sans rechargement", asy
 
   await toggle(page).click();
   await expect(toggle(page)).toHaveText(/Clair/);
-  expect(await theme(page)).toBe("light");
+  await expect.poll(() => theme(page)).toBe("light");
 
   await toggle(page).click();
   await expect(toggle(page)).toHaveText(/Sombre/);
-  expect(await theme(page)).toBe("dark");
+  await expect.poll(() => theme(page)).toBe("dark");
   expect(await background(page)).not.toBe(lightBackground);
 
   await toggle(page).click();
   await expect(toggle(page)).toHaveText(/Système/);
-  expect(await theme(page)).toBe("light");
+  await expect.poll(() => theme(page)).toBe("light");
   expect(await page.evaluate(() => (window as unknown as { marker?: number }).marker)).toBe(1);
 });
 
@@ -42,13 +42,13 @@ test("le choix survit à un rechargement", async ({ page }) => {
   await page.reload();
 
   await expect(toggle(page)).toHaveText(/Sombre/);
-  expect(await theme(page)).toBe("dark");
+  await expect.poll(() => theme(page)).toBe("dark");
 });
 
 test("« système » suit prefers-color-scheme, y compris en direct", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await gotoRoute(page);
-  expect(await theme(page)).toBe("dark");
+  await expect.poll(() => theme(page)).toBe("dark");
 
   await page.emulateMedia({ colorScheme: "light" });
   await expect.poll(() => theme(page)).toBe("light");
@@ -62,7 +62,7 @@ test("le thème est posé avant le chargement de l'application (pas de flash)", 
   await page.route("**/assets/*.js", (route) => route.abort());
   await gotoRoute(page);
 
-  expect(await theme(page)).toBe("dark");
+  await expect.poll(() => theme(page)).toBe("dark");
 });
 
 test("une valeur stockée invalide revient à « système »", async ({ page }) => {
@@ -73,7 +73,7 @@ test("une valeur stockée invalide revient à « système »", async ({ page }) 
   await gotoRoute(page);
 
   await expect(toggle(page)).toHaveText(/Système/);
-  expect(await theme(page)).toBe("dark");
+  await expect.poll(() => theme(page)).toBe("dark");
 });
 
 test("le graphique suit le thème sans rechargement ni recréation", async ({ page }) => {
