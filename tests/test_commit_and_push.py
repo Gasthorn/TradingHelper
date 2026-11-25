@@ -187,3 +187,67 @@ def test_usage_error_without_paths(repo: _Repo) -> None:
 
     assert result.returncode == 2
     assert "Usage" in result.stderr
+
+
+# --- pull --rebase et tentatives (R4) ------------------------------------------------------------
+
+
+def _other_clone(repo: _Repo) -> _Repo:
+    """Second clone du même distant, pour simuler un push concurrent."""
+    other = repo.root / "other"
+    subprocess.run(["git", "clone", "-q", str(repo.remote), str(other)], env=repo.env, check=True)
+    return _Repo(repo.root, other, repo.remote, repo.env)
+
+
+def test_rebases_over_concurrent_push(repo: _Repo) -> None:
+    other = _other_clone(repo)
+    other.write("README.md", "modifié ailleurs\n")
+    other.git("commit", "-q", "-am", "humain")
+    other.git("push", "-q", "origin", "main")
+    repo.write("data/runs/2026-11-23.json", "{}\n")
+
+    result = repo.run_script("data: daily update 2026-11-23", "data/")
+
+    assert result.returncode == 0, result.stderr
+    log = repo.git("log", "--format=%s", "main", cwd=repo.remote).splitlines()
+    assert log == ["data: daily update 2026-11-23", "humain", "init"]
+    merges = repo.git("rev-list", "--merges", "main", cwd=repo.remote)
+    assert merges == ""
+    assert repo.outputs()["pushed_sha"] == repo.remote_head()
+
+
+def test_fails_after_three_attempts(repo: _Repo) -> None:
+    hook = repo.remote / "hooks" / "pre-receive"
+    hook.write_text("#!/bin/sh\necho refus >&2\nexit 1\n", encoding="utf-8", newline="\n")
+    hook.chmod(0o755)
+    before = repo.remote_head()
+    repo.write("data/runs/2026-11-23.json", "{}\n")
+
+    result = repo.run_script("data: daily update 2026-11-23", "data/")
+
+    assert result.returncode == 1
+    assert [line for line in result.stderr.splitlines() if "Tentative de push" in line] == [
+        "Tentative de push 1/3",
+        "Tentative de push 2/3",
+        "Tentative de push 3/3",
+    ]
+    assert "échec" in result.stderr
+    assert repo.remote_head() == before
+
+
+def test_rebase_conflict_is_aborted(repo: _Repo) -> None:
+    other = _other_clone(repo)
+    other.write("data/raw/prices/AAPL.json", '{"autre": 1}\n')
+    other.git("commit", "-q", "-am", "humain")
+    other.git("push", "-q", "origin", "main")
+    before = repo.remote_head()
+    repo.write("data/raw/prices/AAPL.json", '{"bot": 1}\n')
+
+    result = repo.run_script("data: daily update 2026-11-23", "data/")
+
+    assert result.returncode == 1
+    assert repo.remote_head() == before
+    git_dir = repo.work / ".git"
+    assert not (git_dir / "rebase-merge").exists()
+    assert not (git_dir / "rebase-apply").exists()
+    assert repo.git("log", "-1", "--format=%s") == "data: daily update 2026-11-23"

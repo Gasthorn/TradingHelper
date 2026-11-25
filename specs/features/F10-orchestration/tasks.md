@@ -63,7 +63,7 @@
   - Fini quand : tests verts sous Git Bash en local ; `git ls-files --eol scripts/ci/commit-and-push.sh` montre `i/lf` ;
     qualité verte.
 
-- [ ] **T6** `commit-and-push.sh` : `pull --rebase` + push, 3 tentatives — R4
+- [x] **T6** `commit-and-push.sh` : `pull --rebase` + push, 3 tentatives — R4
   - Tests : `test_commit_and_push.py::test_rebases_over_concurrent_push` (un autre clone pousse un commit sur un autre
     fichier entre-temps → historique linéaire, les deux commits présents sur le distant),
     `::test_fails_after_three_attempts` (distant rendu inaccessible ou hook `pre-receive` qui refuse ; `TH_PUSH_SLEEP=0`
