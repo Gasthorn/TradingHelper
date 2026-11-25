@@ -105,7 +105,7 @@
   - Fichiers : `.github/workflows/daily.yml`, `tests/test_workflows.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T10** `backfill.yml` — R1, R2, R5, R7, R9, R11, R12, R14
+- [x] **T10** `backfill.yml` — R1, R2, R5, R7, R9, R11, R12, R14
   - Tests : paramètres `backfill` ajoutés aux tests de T8 et T9 (permissions, groupe, ordre, artefact, deploy,
     conclude, timeouts, SHA) ; `::test_backfill_inputs` (`symbols` chaîne facultative, `full` booléen défaut `false`,
     `start` chaîne facultative), `::test_commit_uses_commit_message_and_data_path[backfill]` (`--kind backfill`),

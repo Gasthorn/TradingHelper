@@ -66,7 +66,12 @@ def _step_running(name: str, job: str, fragment: str) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize(
-    ("name", "expected"), [("deploy-pages", PAGES_PERMISSIONS), ("daily", {"contents": "read"})]
+    ("name", "expected"),
+    [
+        ("deploy-pages", PAGES_PERMISSIONS),
+        ("daily", {"contents": "read"}),
+        ("backfill", {"contents": "read"}),
+    ],
 )
 def test_workflow_level_permissions(name: str, expected: dict[str, str]) -> None:
     assert _workflow(name)["permissions"] == expected
@@ -144,7 +149,7 @@ def test_deploy_pages_deploy_job() -> None:
     _step_using("deploy-pages", "deploy", "actions/deploy-pages")
 
 
-@pytest.mark.parametrize("name", ["deploy-pages", "daily"])
+@pytest.mark.parametrize("name", ["deploy-pages", "daily", "backfill"])
 def test_actions_pinned_by_sha(name: str) -> None:
     uses = re.findall(r"^\s*(?:-\s*)?uses:\s*(\S+)", _text(name), re.M)
 
@@ -157,7 +162,11 @@ def test_actions_pinned_by_sha(name: str) -> None:
 
 @pytest.mark.parametrize(
     ("name", "expected"),
-    [("deploy-pages", {"build": 15, "deploy": 15}), ("daily", {"pipeline": 30, "conclude": 5})],
+    [
+        ("deploy-pages", {"build": 15, "deploy": 15}),
+        ("daily", {"pipeline": 30, "conclude": 5}),
+        ("backfill", {"pipeline": 30, "conclude": 5}),
+    ],
 )
 def test_job_timeouts(name: str, expected: dict[str, int]) -> None:
     """R12 : chaque job (hors appel de workflow réutilisable) a son `timeout-minutes`."""
@@ -170,14 +179,14 @@ def test_job_timeouts(name: str, expected: dict[str, int]) -> None:
     assert timeouts == expected
 
 
-@pytest.mark.parametrize("name", ["deploy-pages", "daily"])
+@pytest.mark.parametrize("name", ["deploy-pages", "daily", "backfill"])
 def test_jobs_run_on_ubuntu_latest(name: str) -> None:
     for job, config in _jobs(name).items():
         if "uses" not in config:
             assert config["runs-on"] == "ubuntu-latest", job
 
 
-@pytest.mark.parametrize("name", ["deploy-pages", "daily"])
+@pytest.mark.parametrize("name", ["deploy-pages", "daily", "backfill"])
 def test_no_user_input_interpolated_in_run(name: str) -> None:
     """R14 : une valeur fournie par l'utilisateur passe par `env:`, jamais dans un `run:`."""
     for job in _jobs(name):
@@ -189,7 +198,7 @@ def test_no_user_input_interpolated_in_run(name: str) -> None:
 
 # --- daily.yml : job `pipeline` (R1, R2, R4 à R7, R11, R12) ------------------------------------
 
-DATA_WRITERS = ["daily"]
+DATA_WRITERS = ["daily", "backfill"]
 
 
 def _step_id(name: str, job: str, step_id: str) -> dict[str, Any]:
@@ -240,23 +249,36 @@ def test_pipeline_outputs(name: str) -> None:
     }
 
 
-def _run_ingest_step(name: str, uv_exit: int, tmp_path: Path) -> tuple[int, str]:
+def _run_ingest_step(
+    name: str, uv_exit: int, tmp_path: Path, inputs: dict[str, str] | None = None
+) -> tuple[int, str, list[str]]:
     """Exécute le script de l'étape `ingest` comme GitHub Actions (`bash -eo pipefail`), avec
-    une fonction `uv` qui sort avec `uv_exit` ; renvoie (code, contenu de GITHUB_OUTPUT)."""
+    une fonction `uv` qui note ses arguments et sort avec `uv_exit`. `inputs` : variables
+    d'environnement de l'étape (valeurs saisies au lancement). Renvoie (code, contenu de
+    GITHUB_OUTPUT, arguments reçus par `uv`)."""
     bash = find_bash()
     if bash is None:
         pytest.skip("bash introuvable")
     output = tmp_path / "github_output"
     output.write_text("", encoding="utf-8")
-    script = f"uv() {{ return {uv_exit}; }}\n{_step_id(name, 'pipeline', 'ingest')['run']}"
+    uv_args = tmp_path / "uv_args"
+    fake_uv = f'uv() {{ printf "%s\\n" "$@" > "$UV_ARGS"; return {uv_exit}; }}'
+    script = f"{fake_uv}\n{_step_id(name, 'pipeline', 'ingest')['run']}"
     result = subprocess.run(
         [bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
-        env={"GITHUB_OUTPUT": str(output), "PATH": "/usr/bin:/bin"},
+        env={
+            "GITHUB_OUTPUT": str(output),
+            "UV_ARGS": str(uv_args),
+            "PATH": "/usr/bin:/bin",
+            **(inputs or {}),
+        },
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
-    return result.returncode, output.read_text(encoding="utf-8")
+    received = uv_args.read_text(encoding="utf-8").splitlines() if uv_args.exists() else []
+    return result.returncode, output.read_text(encoding="utf-8"), received
 
 
 @pytest.mark.parametrize("name", DATA_WRITERS)
@@ -265,7 +287,7 @@ def test_ingest_exit_2_stops_and_1_continues(
     name: str, uv_exit: int, step_exit: int, tmp_path: Path
 ) -> None:
     """R7 : code 2 → arrêt ; code 1 → on continue, code mémorisé pour le job `conclude`."""
-    code, output = _run_ingest_step(name, uv_exit, tmp_path)
+    code, output, _ = _run_ingest_step(name, uv_exit, tmp_path)
 
     assert code == step_exit
     assert output.splitlines() == [f"exit_code={uv_exit}"]
@@ -284,7 +306,7 @@ def test_commit_step_only_on_main(name: str) -> None:
     assert _step_id(name, "pipeline", "commit")["if"] == "github.ref == 'refs/heads/main'"
 
 
-@pytest.mark.parametrize(("name", "kind"), [("daily", "daily")])
+@pytest.mark.parametrize(("name", "kind"), [("daily", "daily"), ("backfill", "backfill")])
 def test_commit_uses_commit_message_and_data_path(name: str, kind: str) -> None:
     step = _step_id(name, "pipeline", "commit")
     run = step["run"]
@@ -390,3 +412,73 @@ def test_conclude_outcome(name: str, pipeline: str, deploy: str, ingest: str, ok
     code = _run_conclude(name, pipeline, deploy, ingest)
 
     assert (code == 0) is ok
+
+
+# --- backfill.yml : inputs passés par `env:` (R14) -----------------------------------------------
+
+NO_INPUTS = {"TH_IN_SYMBOLS": "", "TH_IN_FULL": "false", "TH_IN_START": ""}
+
+
+def test_backfill_triggers_and_inputs() -> None:
+    triggers = _workflow("backfill")["on"]
+
+    assert set(triggers) == {"workflow_dispatch"}
+    inputs = triggers["workflow_dispatch"]["inputs"]
+    assert set(inputs) == {"symbols", "full", "start"}
+    assert inputs["symbols"]["type"] == "string"
+    assert inputs["symbols"]["required"] is False
+    assert inputs["full"]["type"] == "boolean"
+    assert inputs["full"]["default"] is False
+    assert inputs["start"]["type"] == "string"
+    assert inputs["start"]["required"] is False
+
+
+def test_backfill_ingest_step_reads_inputs_from_env() -> None:
+    assert _step_id("backfill", "pipeline", "ingest")["env"] == {
+        "TH_IN_SYMBOLS": "${{ inputs.symbols }}",
+        "TH_IN_FULL": "${{ inputs.full }}",
+        "TH_IN_START": "${{ inputs.start }}",
+    }
+
+
+def test_daily_ingest_has_no_arguments(tmp_path: Path) -> None:
+    _, _, received = _run_ingest_step("daily", 0, tmp_path)
+
+    assert received == ["run", "th", "ingest"]
+
+
+@pytest.mark.parametrize(
+    ("inputs", "expected"),
+    [
+        ({}, []),
+        ({"TH_IN_SYMBOLS": "AAPL,MSFT"}, ["--symbols", "AAPL,MSFT"]),
+        ({"TH_IN_SYMBOLS": "AAPL", "TH_IN_FULL": "true"}, ["--symbols", "AAPL", "--full"]),
+        (
+            {"TH_IN_FULL": "true", "TH_IN_START": "2015-01-01"},
+            ["--full", "--start", "2015-01-01"],
+        ),
+        # Validation déléguée à F01 R13 : `--start` sans `--full` est transmis, th sort en 2.
+        ({"TH_IN_START": "2015-01-01"}, ["--start", "2015-01-01"]),
+    ],
+    ids=["aucun", "symbols", "symbols-full", "full-start", "start-seul"],
+)
+def test_backfill_ingest_arguments(
+    inputs: dict[str, str], expected: list[str], tmp_path: Path
+) -> None:
+    code, _, received = _run_ingest_step("backfill", 0, tmp_path, {**NO_INPUTS, **inputs})
+
+    assert code == 0
+    assert received == ["run", "th", "ingest", *expected]
+
+
+def test_backfill_input_is_never_executed(tmp_path: Path) -> None:
+    """R14 : une valeur malveillante reste un argument littéral, jamais une commande."""
+    marker = tmp_path / "pwned"
+    payload = f'AAPL"; touch {marker.as_posix()}; echo "$(touch {marker.as_posix()})'
+    inputs = {**NO_INPUTS, "TH_IN_SYMBOLS": payload}
+
+    code, _, received = _run_ingest_step("backfill", 0, tmp_path, inputs)
+
+    assert code == 0
+    assert received == ["run", "th", "ingest", "--symbols", payload]
+    assert not marker.exists()
