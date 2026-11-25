@@ -51,7 +51,7 @@
 
 ## Script de commit et push
 
-- [ ] **T5** `commit-and-push.sh` : commit conditionnel, chemins limités, identité du bot — R3
+- [x] **T5** `commit-and-push.sh` : commit conditionnel, chemins limités, identité du bot — R3
   - Préalable : `.gitattributes` : `*.sh text eol=lf` ; test `tests/test_repo_hygiene.py::test_gitattributes_forces_lf`
     étendu à `sh`.
   - Tests (helper qui crée un dépôt distant `git init --bare` + un clone dans `tmp_path`, `skipif` sans `bash`) :

@@ -38,6 +38,8 @@ IGNORED_PATHS = [
 LF_EXTENSIONS = ["py", "json", "yaml", "yml", "ts", "tsx", "md", "toml"]
 # Au-delà du minimum R19 : fichiers du dashboard.
 LF_EXTENSIONS_DASHBOARD = ["js", "mjs", "cjs", "html", "css"]
+# F10 (T5) : un script bash en CRLF échoue sous Linux.
+LF_EXTENSIONS_SCRIPTS = ["sh"]
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
@@ -58,7 +60,9 @@ def test_gitignore_excludes(path: str) -> None:
     assert result.returncode == 0, f"{path} n'est pas ignoré par .gitignore"
 
 
-@pytest.mark.parametrize("extension", LF_EXTENSIONS + LF_EXTENSIONS_DASHBOARD)
+@pytest.mark.parametrize(
+    "extension", LF_EXTENSIONS + LF_EXTENSIONS_DASHBOARD + LF_EXTENSIONS_SCRIPTS
+)
 def test_gitattributes_forces_lf(extension: str) -> None:
     result = _git("check-attr", "eol", "--", f"any/file.{extension}")
 
