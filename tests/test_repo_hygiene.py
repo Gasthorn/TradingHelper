@@ -542,6 +542,27 @@ def test_ci_dashboard_job_checks_generated_types() -> None:
     assert _step_index("dashboard", "npm ci") < gen < _step_index("dashboard", "npm run typecheck")
 
 
+def test_ci_dashboard_job_runs_dashboard_tests() -> None:
+    """F09 R25 : le job `dashboard` lance Vitest, installe Chromium (et ses dépendances système),
+    puis les tests e2e Playwright, après le contrôle des types générés."""
+    gen = _step_index("dashboard", "npm run gen:types")
+    unit = _step_index("dashboard", "npm test")
+    install = _step_index("dashboard", "playwright install --with-deps chromium")
+    e2e = _step_index("dashboard", "npm run test:e2e")
+
+    assert gen < unit < install < e2e
+
+
+def test_ci_dashboard_job_caches_playwright_browsers() -> None:
+    """F09 (T23) : navigateurs Playwright en cache, clé liée à la version de @playwright/test."""
+    cache = [s for s in _steps("dashboard") if str(s.get("uses", "")).startswith("actions/cache@")]
+
+    assert len(cache) == 1
+    assert cache[0]["with"]["path"] == "~/.cache/ms-playwright"
+    assert "playwright" in str(cache[0]["with"]["key"])
+    assert _steps("dashboard").index(cache[0]) < _step_index("dashboard", "playwright install")
+
+
 def test_readme_documents_export() -> None:
     """F08 (T23) : commande `th export`, `--out`, codes de sortie, types TS générés."""
     readme = _readme()
