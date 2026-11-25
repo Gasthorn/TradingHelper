@@ -5,6 +5,7 @@ import { Header } from "./components/Header";
 import { Loading } from "./components/Loading";
 import { useManifest } from "./data/useData";
 import { useRoute } from "./hooks/useRoute";
+import { useTheme } from "./hooks/useTheme";
 import type { Route } from "./lib/routes";
 import { NotFound } from "./pages/NotFound";
 import { Overview } from "./pages/Overview";
@@ -25,11 +26,16 @@ function Page({ route, manifest }: { route: Route; manifest: ManifestFile }) {
 export function App() {
   const route = useRoute();
   const manifest = useManifest();
+  const theme = useTheme();
   // La page introuvable ne dépend d'aucune donnée.
   const key = route.page === "ticker" ? `ticker/${route.symbol}` : route.page;
   return (
     <>
-      <Header dataAsOf={manifest.status === "ok" ? manifest.data.data_as_of : undefined} />
+      <Header
+        dataAsOf={manifest.status === "ok" ? manifest.data.data_as_of : undefined}
+        themePreference={theme.preference}
+        onCycleTheme={theme.cycle}
+      />
       <main>
         {route.page === "not_found" ? (
           <NotFound />

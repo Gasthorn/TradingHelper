@@ -1,5 +1,20 @@
+/*
+ * Thème (spec F09 — R7, R8) : `data-theme` posé sur <html> par le script inline de index.html
+ * avant le premier rendu, puis par `hooks/useTheme.ts`. Contrastes WCAG AA vérifiés par axe-core
+ * dans les deux thèmes (e2e/a11y.spec.ts). Haussier / baissier ne reposent jamais sur la seule
+ * couleur (flèche, signe, forme).
+ */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #4d4d4d;
+  --surface: #f3f4f6;
+  --border: #8a8f98;
+  --link: #0b57d0;
+  --focus: #0b57d0;
+  --up: #0a6b37;
+  --down: #b3261e;
   --disclaimer-bg: #fff4d6;
   --disclaimer-fg: #5c4400;
   --disclaimer-border: #e8c766;
@@ -7,16 +22,35 @@
   line-height: 1.5;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --disclaimer-bg: #3a2f10;
-    --disclaimer-fg: #f5dc9a;
-    --disclaimer-border: #6b5520;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121417;
+  --fg: #e8e8e8;
+  --muted: #b4b8bf;
+  --surface: #1f2329;
+  --border: #6b7280;
+  --link: #8ab4f8;
+  --focus: #8ab4f8;
+  --up: #4cc38a;
+  --down: #ff8a80;
+  --disclaimer-bg: #3a2f10;
+  --disclaimer-fg: #f5dc9a;
+  --disclaimer-border: #6b5520;
 }
 
 body {
   margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+a {
+  color: var(--link);
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
 /* Bandeau P8 : collé en haut de page, jamais masqué par le défilement. */
@@ -39,6 +73,7 @@ main {
 
 .site-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 1rem;
   padding-block: 0.75rem;
@@ -87,4 +122,16 @@ main {
 
 .stale-badge::before {
   content: "⚠ ";
+}
+
+.theme-toggle {
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
 }

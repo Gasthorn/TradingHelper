@@ -181,7 +181,7 @@
     jour prise à New York (03:00 UTC le samedi = vendredi soir). 7 tests e2e ; vérifié dans le navigateur sur
     l'export local (« Données au 24/11/2026 », pas d'alerte le 25/11).
 
-- [ ] **T14** Thème et contrastes — R7, R8
+- [x] **T14** Thème et contrastes — R7, R8
   - Tests : `e2e/theme.spec.ts::toggle without reload` (couleur de fond calculée change), `::persists after reload`,
     `::system follows emulated scheme` (`page.emulateMedia({ colorScheme })`), `::no flash` (`data-theme` posé avant le
     chargement du bundle) ; `e2e/a11y.spec.ts::no contrast violation light|dark` (`@axe-core/playwright`, règle
@@ -191,6 +191,11 @@
     couleurs haussier/baissier, focus), `dashboard/package.json` (devDependency `@axe-core/playwright`),
     `package-lock.json`, `dashboard/e2e/a11y.spec.ts`, `dashboard/e2e/theme.spec.ts`.
   - Fini quand : e2e vert ; qualité dashboard verte.
+  - Fait (2026-11-25) : `@axe-core/playwright` 4.14.1. Palette en variables CSS sous `:root` / `:root[data-theme="dark"]`
+    (fond, texte, liens, focus, haussier, baissier) ; `:focus-visible` à 3 px ; bascule « Thème : Système / Clair /
+    Sombre » (cible de 44 px). Tests ajoutés : valeur stockée invalide → système ; « système » suit le changement de
+    `prefers-color-scheme` en direct. `.site-header` passe à la ligne (débordement constaté à 268 px dans le
+    navigateur, contrôle 375 px en T20). 16 tests e2e ajoutés ; vérifié dans le navigateur (sombre mémorisé).
 
 ## Overview
 

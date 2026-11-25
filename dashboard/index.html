@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TradingHelper</title>
+    <!-- Thème posé avant le premier rendu, sans flash (F09 R7) ; même clé que src/lib/theme.ts. -->
+    <script>
+      (function () {
+        var pref = null;
+        try {
+          pref = localStorage.getItem("th-theme");
+        } catch (e) {}
+        if (pref !== "light" && pref !== "dark") {
+          pref = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.dataset.theme = pref;
+      })();
+    </script>
   </head>
   <body>
     <!-- Bandeau P8 en HTML statique : visible sur toutes les routes, même si le JavaScript échoue (F09 R5). -->
