@@ -290,11 +290,15 @@
     Tests ajoutés : tableau des cours contenu dans la largeur, page `#/ticker/ZZZ`, cases d'indicateurs au clavier
     (Espace), période changée par les flèches. 86 tests e2e ; vérifié dans le navigateur à 375 × 812.
 
-- [ ] **T21** [P] Déploiement sous `/TradingHelper/` — R10
+- [x] **T21** [P] Déploiement sous `/TradingHelper/` — R10
   - Tests : `e2e/base.spec.ts` (serveur 4174) : `::overview loads under base`, `::ticker loads under base`,
     `::no request outside base` (toutes les requêtes de même origine commencent par `/TradingHelper/`).
   - Fichiers : `dashboard/e2e/base.spec.ts` ; corrections dans `src/` si une URL ignore `BASE_URL`.
   - Fini quand : e2e vert ; qualité dashboard verte.
+  - Fait (2026-11-25) : aucune correction nécessaire (base déjà respectée par T1, T8, T11). Efficacité vérifiée par
+    mutation : base du chargeur forcée à "/" → 2 tests en échec, puis code restauré. Test ajouté : la page est
+    servie sous `/TradingHelper/` avec le bandeau P8 ; le parcours Overview → fiche → accueil reste sous la base.
+    90 tests e2e (dont 4 du projet `base`).
 
 - [ ] **T22** [P] Requêtes de données — R2
   - Tests : `e2e/loading.spec.ts::urls carry manifest hash` (chaque requête de données hors manifest porte `?v=` égal au
