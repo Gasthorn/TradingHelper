@@ -100,7 +100,7 @@
 
 ## Fixtures d'export
 
-- [ ] **T9** Fixtures `empty`, `m1`, `m1-signals` — R24
+- [x] **T9** Fixtures `empty`, `m1`, `m1-signals` — R24
   - Tests : `tests/test_dashboard_fixtures.py::test_fixtures_up_to_date[empty|m1|m1-signals]` (régénération dans
     `tmp_path` identique octet pour octet au dossier commité ; message d'échec donnant la commande de régénération),
     `::test_fixtures_match_json_schemas` (chaque fichier validé par son `schemas/*.schema.json`, Draft 2020-12),
@@ -112,6 +112,10 @@
     `FROZEN_NOW` et `FROZEN_SHA` ; `python -m tests.dashboard_fixtures [--check]`),
     `tests/test_dashboard_fixtures.py`, `dashboard/tests/fixtures/{empty,m1,m1-signals}/` (générés).
   - Fini quand : tests verts ; régénérer deux fois ne produit aucun diff git ; qualité verte.
+  - Fait (2026-11-25) : rendu par `render_files` (pur) puis `replace_dir` de F08, plutôt que `export()` (pas de
+    config ni de dossier de données à préparer) ; commande `uv run python tests/dashboard_fixtures.py [--check]`
+    (le dossier `tests/` n'est pas un paquet : `-m tests.dashboard_fixtures` impossible) ; seed 9, horloge
+    2026-11-23T22:50Z. 17 fichiers, 243 Ko ; `--check` sort en 0 après régénération. 9 tests.
 
 ## Tests de bout en bout et coque de l'application
 
