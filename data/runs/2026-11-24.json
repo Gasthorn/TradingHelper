@@ -246,6 +246,33 @@
         }
       ],
       "warnings": []
+    },
+    {
+      "started_at": "2026-11-25T17:58:46.174580Z",
+      "finished_at": "2026-11-25T17:58:47.354108Z",
+      "duration_s": 1.179528,
+      "args": {
+        "symbols": [
+          "AAPL"
+        ],
+        "full": true,
+        "start": null
+      },
+      "exit_code": 0,
+      "tickers": [
+        {
+          "symbol": "AAPL",
+          "status": "ok",
+          "mode": "full",
+          "bars_added": 0,
+          "bars_revised": 374,
+          "history_rewritten": true,
+          "rewrite_reason": "backfill",
+          "attempts": 1,
+          "error": null
+        }
+      ],
+      "warnings": []
     }
   ],
   "validate": [
@@ -279,6 +306,19 @@
       "started_at": "2026-11-25T17:53:37.132422Z",
       "finished_at": "2026-11-25T17:53:37.725866Z",
       "duration_s": 0.593444,
+      "args": {
+        "symbols": null,
+        "all_history": false
+      },
+      "exit_code": 0,
+      "files_checked": 21,
+      "violations": [],
+      "warnings": []
+    },
+    {
+      "started_at": "2026-11-25T17:58:48.175495Z",
+      "finished_at": "2026-11-25T17:58:49.048959Z",
+      "duration_s": 0.873464,
       "args": {
         "symbols": null,
         "all_history": false
