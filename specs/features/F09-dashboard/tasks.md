@@ -264,12 +264,17 @@
     Tests ajoutés : modèle et Sharpe lus dans `manifest.strategies` (manifest modifié par interception) ; fixture
     `m1` sans légende. 71 tests e2e ; vérifié dans le navigateur (données réelles sans signal : 0 marqueur).
 
-- [ ] **T19** [P] Thème du graphique — R7
+- [x] **T19** [P] Thème du graphique — R7
   - Tests : `e2e/theme.spec.ts::chart follows theme` (sur `#/ticker/AAPL`, `data-theme` du graphique et couleur de fond
     du canvas changent à la bascule, sans rechargement ni recréation du graphique).
   - Fichiers : `dashboard/src/charts/priceChart.ts` (`setTheme`, couleurs lues dans les variables CSS),
     `dashboard/src/pages/Ticker.tsx` (abonnement au thème).
   - Fini quand : e2e vert ; axe sans violation sur `#/ticker/AAPL` dans les deux thèmes ; qualité dashboard verte.
+  - Fait (2026-11-25) : au lieu d'un `setTheme` appelé par la page, le graphique observe `data-theme` sur <html>
+    (`MutationObserver`) puis relit les variables CSS : aucun problème d'ordre entre les effets Preact (l'effet
+    de la page passerait avant celui de `useTheme`). Couleurs réappliquées à toutes les séries, au volume, aux
+    lignes 30/70 et aux marqueurs ; `data-theme` et `data-chart-id` exposés. Le test lit un pixel du canvas.
+    `#/ticker/AAPL` ajouté aux contrôles axe. 74 tests e2e ; vérifié dans le navigateur (AAPL en sombre).
 
 ## Exigences transverses
 

@@ -8,6 +8,8 @@
  * - panneau 1 : RSI14 avec les lignes 30 et 70.
  *
  * Les valeurs exportées sont tracées telles quelles ; les `null` de warm-up sont omis.
+ * Le graphique suit le thème (R7) : il observe `data-theme` sur <html> et relit les couleurs
+ * des variables CSS, sans être recréé.
  * L'état tracé est exposé en attributs `data-*` du conteneur pour les tests e2e (le canvas
  * n'est pas lisible), décision 3 du plan.
  */
@@ -42,6 +44,7 @@ export interface PriceChart {
   setOverlays(overlays: Overlays): void;
   /** Marqueurs BUY ▲ sous la bougie, SELL ▼ au-dessus, avec leur libellé (R8, R17). */
   setMarkers(markers: readonly MarkerView[]): void;
+  /** Détruit le graphique et cesse d'observer le thème. */
   destroy(): void;
 }
 
@@ -81,8 +84,10 @@ function readPalette(): Palette {
   };
 }
 
+let nextChartId = 1;
+
 export function createPriceChart(container: HTMLElement, initial: Overlays): PriceChart {
-  const palette = readPalette();
+  let palette = readPalette();
   const chart: IChartApi = createChart(container, {
     autoSize: true,
     layout: {
@@ -129,15 +134,69 @@ export function createPriceChart(container: HTMLElement, initial: Overlays): Pri
   };
 
   const rsi = chart.addSeries(LineSeries, { color: palette.rsi, lineWidth: 1, priceLineVisible: false }, 1);
-  for (const level of RSI_LINES) {
-    rsi.createPriceLine({ price: level, color: palette.fg, lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: "" });
-  }
+  const rsiLines = RSI_LINES.map((level) =>
+    rsi.createPriceLine({ price: level, color: palette.fg, lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: "" }),
+  );
   chart.panes()[1]?.setStretchFactor(0.3);
 
   const markerLayer = createSeriesMarkers(candles, []);
   container.dataset.markers = "0";
 
   let overlays = initial;
+  let lastData: { series: TickerSeries; window: BarWindow } | null = null;
+  let lastMarkers: readonly MarkerView[] = [];
+
+  /** Volume coloré comme la bougie du jour (dépend de la palette). */
+  function renderVolume(): void {
+    if (lastData === null) return;
+    const { series, window } = lastData;
+    const data = [];
+    for (let i = Math.max(0, window.from); i <= window.to; i++) {
+      const [time, open, close, value] = [series.date[i], series.open[i], series.close[i], series.volume[i]];
+      if (time === undefined || open === undefined || close === undefined || value === undefined) continue;
+      data.push({ time, value, color: close >= open ? palette.up : palette.down });
+    }
+    volume.setData(data);
+  }
+
+  function renderMarkers(): void {
+    const items: SeriesMarker<Time>[] = lastMarkers.map((m) =>
+      m.action === "BUY"
+        ? { time: m.date, position: "belowBar", shape: "arrowUp", color: palette.up, text: "BUY" }
+        : { time: m.date, position: "aboveBar", shape: "arrowDown", color: palette.down, text: "SELL" },
+    );
+    markerLayer.setMarkers(items);
+    container.dataset.markers = String(items.length);
+  }
+
+  /** Relit les couleurs du thème courant et les applique à toutes les séries. */
+  function applyTheme(): void {
+    palette = readPalette();
+    chart.applyOptions({
+      layout: { background: { type: ColorType.Solid, color: palette.bg }, textColor: palette.fg },
+      grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
+    });
+    candles.applyOptions({
+      borderUpColor: palette.up,
+      wickUpColor: palette.up,
+      downColor: palette.down,
+      borderDownColor: palette.down,
+      wickDownColor: palette.down,
+    });
+    for (const key of OVERLAY_ORDER) {
+      for (const s of overlaySeries[key]) s.applyOptions({ color: palette[key] });
+    }
+    rsi.applyOptions({ color: palette.rsi });
+    for (const lineApi of rsiLines) lineApi.applyOptions({ color: palette.fg });
+    renderVolume();
+    renderMarkers();
+    container.dataset.theme = document.documentElement.dataset.theme ?? "light";
+  }
+
+  const themeObserver = new MutationObserver(applyTheme);
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  container.dataset.theme = document.documentElement.dataset.theme ?? "light";
+  container.dataset.chartId = String(nextChartId++);
   let available: Record<keyof Overlays, boolean> = { sma20: true, sma50: true, sma200: true, bollinger: true };
 
   function applyOverlays(): void {
@@ -158,17 +217,14 @@ export function createPriceChart(container: HTMLElement, initial: Overlays): Pri
       const dates = series.date;
       const from = Math.max(0, window.from);
       const candleData = [];
-      const volumeData = [];
       for (let i = from; i <= window.to; i++) {
-        const [time, open, high, low, close, vol] = [
-          dates[i], series.open[i], series.high[i], series.low[i], series.close[i], series.volume[i],
-        ];
+        const [time, open, high, low, close] = [dates[i], series.open[i], series.high[i], series.low[i], series.close[i]];
         if (time === undefined || open === undefined || high === undefined || low === undefined || close === undefined) continue;
         candleData.push({ time, open, high, low, close });
-        if (vol !== undefined) volumeData.push({ time, value: vol, color: close >= open ? palette.up : palette.down });
       }
       candles.setData(candleData);
-      volume.setData(volumeData);
+      lastData = { series, window };
+      renderVolume();
       const [sma20] = overlaySeries.sma20;
       const [sma50] = overlaySeries.sma50;
       const [sma200] = overlaySeries.sma200;
@@ -199,16 +255,12 @@ export function createPriceChart(container: HTMLElement, initial: Overlays): Pri
     },
 
     setMarkers(markers) {
-      const items: SeriesMarker<Time>[] = markers.map((m) =>
-        m.action === "BUY"
-          ? { time: m.date, position: "belowBar", shape: "arrowUp", color: palette.up, text: "BUY" }
-          : { time: m.date, position: "aboveBar", shape: "arrowDown", color: palette.down, text: "SELL" },
-      );
-      markerLayer.setMarkers(items);
-      container.dataset.markers = String(items.length);
+      lastMarkers = markers;
+      renderMarkers();
     },
 
     destroy() {
+      themeObserver.disconnect();
       chart.remove();
     },
   };

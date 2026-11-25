@@ -4,7 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, gotoRoute, test, useFixture } from "./support";
 
 for (const colorScheme of ["light", "dark"] as const) {
-  for (const hash of ["#/", "#/inconnu"]) {
+  for (const hash of ["#/", "#/inconnu", "#/ticker/AAPL"]) {
     test(`aucune violation de contraste sur ${hash} en thème ${colorScheme}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme });
       await useFixture(page, "m1");
