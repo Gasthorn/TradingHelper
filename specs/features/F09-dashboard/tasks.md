@@ -35,7 +35,7 @@
     dollar) : milliers U+202F, avant `$`/`%` U+00A0, moins U+2212 ; aucun signe pour une valeur arrondie à zéro ;
     valeur non finie → « — ». 44 tests (22 × 2 fuseaux).
 
-- [ ] **T3** Dates civiles et fraîcheur — R6, R11
+- [x] **T3** Dates civiles et fraîcheur — R6, R11
   - Tests : `src/lib/dates.test.ts` : `dayNumber`/`fromDayNumber` aller-retour (y compris 29 février) ;
     `todayInNewYork` (instant 2026-11-24T03:00Z → `2026-11-23`) ; `lastAssumedSession` (lundi → vendredi précédent,
     samedi → vendredi) ; `sessionsBehind` (même semaine, à cheval sur un week-end, férié compté comme séance,
@@ -44,6 +44,9 @@
   - Fichiers : `dashboard/src/lib/dates.ts` (sans `periodStart`, en T4), `dashboard/src/lib/dates.test.ts`.
   - Fini quand : tests verts sous les deux fuseaux ; `dates.ts` n'appelle jamais `new Date("YYYY-MM-DD")`
     (test `dates.test.ts::no_string_date_parsing` sur le source) ; qualité dashboard verte.
+  - Fait (2026-11-25) : retard calculé par formule (jours ouvrés avant un numéro de jour), sans boucle ; contrôle
+    du source par import `?raw`, commentaires retirés avant analyse ; `dayNumber` refuse une date mal formée ou
+    inexistante (`RangeError`). 54 tests (27 × 2 fuseaux).
 
 - [ ] **T4** Périodes et séries — R16, R15
   - Tests : `dates.test.ts::periodStart` (1M depuis le 2026-11-23 → 2026-10-23 ; depuis le 31 mars → 28/29 février ;
