@@ -1,6 +1,6 @@
 # F09 — Dashboard GitHub Pages
 
-- **Statut** : ✅ Approved (2026-11-25)
+- **Statut** : 🧭 Planned (2026-11-25)
 - **Milestone** : M1 (exigences et critères `[M1]` : socle, Overview, Ticker) puis M3/M4 (`[M3]` : Portfolios,
   Portfolio, Models, Health, contenus dépendant des signaux et portefeuilles)
 - **Dépend de** : F08 (M1 pour `[M1]`, M3 pour `[M3]`) ; F00 R14 (`base` Vite configurable)
@@ -105,7 +105,7 @@ Vue d'ensemble ; le contenu exigible est dans les exigences citées.
   En M1, ces sections existent et sont en état vide (R4).
 
 ### Ticker
-- **R14** `[M1]` `#/ticker/:symbol` DOIT décoder le symbole (`decodeURIComponent`, ex. `BRK-B`, `%5EGSPC`) et le comparer
+- **R14** `[M1]` `#/ticker/:symbol` DOIT décoder le symbole (`decodeURIComponent`, ex. `BRK%2DB` → `BRK-B`) et le comparer
   aux symboles du manifest sans tenir compte de la casse. SI le symbole est absent du manifest, ALORS la page DOIT
   afficher « Pas de données pour <symbole> » (R3 ne s'applique pas).
 - **R15** `[M1]` Le graphique DOIT afficher chandeliers et volume (histogramme), les overlays activables SMA20, SMA50,
@@ -183,7 +183,7 @@ Vue d'ensemble ; le contenu exigible est dans les exigences citées.
 - [ ] Tests unitaires des formats : `232,40 $`, `0,1234 $`, `+0,63 %`, `23/11/2026`, `null` → `—` ; une date de séance
   reste la même dans les fuseaux `America/Los_Angeles` et `Pacific/Auckland`. (R11, R23)
 - [ ] Fixture `m1` : une ligne par symbole avec sparkline SVG, benchmark signalé, clic → fiche ticker. (R12)
-- [ ] `#/ticker/brk-b` et `#/ticker/%5EGSPC` résolus si présents ; `#/ticker/ZZZ` → « Pas de données pour ZZZ ». (R14)
+- [ ] `#/ticker/brk.b` résolu vers `BRK.B` (casse ignorée) ; `BRK%2DB` décodé en `BRK-B` (test unitaire) ; `#/ticker/ZZZ` → « Pas de données pour ZZZ ». (R14)
 - [ ] Ticker de moins de 200 barres : SMA200 désactivée « historique insuffisant » ; aucune valeur de warm-up tracée à 0 ;
   SMA20 et SMA50 actives par défaut. (R15)
 - [ ] Période 1M sur une fixture se terminant le 2026-11-23 → première barre ≥ 2026-10-23 ; 5A sur 2 ans d'historique →
