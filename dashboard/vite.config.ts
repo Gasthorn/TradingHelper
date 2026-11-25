@@ -3,7 +3,7 @@ import { defineConfig, loadEnv } from "vite";
 
 /**
  * `base` configurable (spec F00 — R14) via TH_DASHBOARD_BASE :
- * "/" en local, "/TradingHelper/" pour https://<user>.github.io/TradingHelper/ (F09 R7).
+ * "/" en local, "/TradingHelper/" pour https://<user>.github.io/TradingHelper/ (F09 R10).
  * `loadEnv` lit l'environnement du processus (et d'éventuels fichiers .env) sans exposer
  * ces variables au code client : seules celles préfixées par VITE_ le sont.
  */
