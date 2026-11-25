@@ -37,17 +37,22 @@ uv run th export [--out DIR]     # fichiers du dashboard (défaut dashboard/publ
 uv run th commit-message --kind daily|backfill|model --since T0   # message de commit des workflows (sans config)
 cd dashboard && npm run gen:types         # régénérer src/types/ depuis schemas/ (après `uv run th schemas`)
 cd dashboard && npm ci && npm run dev     # dashboard local (après `uv run th export`)
+cd dashboard && npm test                  # tests unitaires du dashboard (Vitest, src/lib/ et src/data/)
+cd dashboard && npm run test:e2e          # tests e2e (Playwright, Chromium : `npx playwright install chromium`)
+cd dashboard && npm run lighthouse        # mesure Lighthouse de l'Overview (vérification F09 R26, hors CI)
+uv run python tests/dashboard_fixtures.py # régénérer dashboard/tests/fixtures/ (--check : vérifier)
 ```
 
 ## Conventions de code
 - Python 3.12, typage complet, `from __future__ import annotations`, dataclasses/pydantic plutôt que dicts.
-- Fonctions pures dans `features/`, `backtest/metrics.py`, `data/bars.py`, `data/quality.py` (règles de qualité), `export/build.py` (construction des fichiers du dashboard), `orchestration/commit_message.py` (message de commit des workflows) ; effets de bord (réseau, fichiers) isolés dans `data/source.py` (seul module qui importe yfinance/pandas), `data/storage.py`, `data/ingest.py`, `data/validate.py`, `export/dashboard.py`, `cli.py`.
+- Fonctions pures dans `features/`, `backtest/metrics.py`, `data/bars.py`, `data/quality.py` (règles de qualité), `export/build.py` (construction des fichiers du dashboard), `orchestration/commit_message.py` (message de commit des workflows), `dashboard/src/lib/` (formats, dates, routes, séries, marqueurs, thème) ; effets de bord (réseau, fichiers) isolés dans `data/source.py` (seul module qui importe yfinance/pandas), `data/storage.py`, `data/ingest.py`, `data/validate.py`, `export/dashboard.py`, `cli.py` ; côté dashboard, `dashboard/src/data/loader.ts` (seul module qui appelle `fetch`).
 - Workflows GitHub Actions : logique de décision hors du YAML (commandes `th`, `scripts/ci/commit-and-push.sh`), structure vérifiée par `tests/test_workflows.py` ; actions tierces épinglées par SHA.
 - Jamais d'appel réseau dans les tests : utiliser `FakePriceSource` et les fixtures de `tests/fixtures/`.
 - Toute stochasticité passe par un `numpy.random.Generator` seedé reçu en paramètre.
 - Écritures de fichiers de données : toujours atomiques via `storage` (`atomic_write_json` ; prix : `write_prices_if_changed`, sérialisation canonique `dumps_prices`).
 - Dates : `datetime.date` pour les séances, UTC ISO-8601 pour les timestamps.
 - Dashboard : TypeScript strict, types générés depuis `schemas/`, pas de framework lourd.
+- Tests e2e du dashboard : données servies par interception depuis `dashboard/tests/fixtures/`, jamais depuis `public/data/` ; le graphique (canvas) se vérifie par ses attributs `data-*`.
 
 ## Interdits
 - Pas de look-ahead (P1) : ne jamais accéder aux données au-delà de `ctx.date` dans une stratégie.

@@ -341,7 +341,7 @@
     Résultat (fixture `m1`) : scores 100 / 100 / 100 (médiane 100), LCP 0,75 s, FCP 0,75 s, TBT 0 à 30 ms,
     CLS 0,014, 17,3 Ko transférés.
 
-- [ ] **T25** Documentation — R23, R24, R25, R26
+- [x] **T25** Documentation — R23, R24, R25, R26
   - Tests : `tests/test_repo_hygiene.py::test_readme_documents_dashboard` (section Dashboard : pages livrées,
     `npm run dev`, `npm test`, `npm run test:e2e`, `npm run lighthouse`, régénération des fixtures),
     `::test_docs_list_dashboard_layout` (`CLAUDE.md` liste `dashboard/src/lib/` parmi les modules purs et les commandes
@@ -349,6 +349,9 @@
     `tests/fixtures/`).
   - Fichiers : `README.md`, `CLAUDE.md`, `specs/02-architecture.md`.
   - Fini quand : tests verts ; qualité verte.
+  - Fait (2026-11-26) : README, section Dashboard (pages livrées, développement local, tests, fixtures) ; CLAUDE.md
+    (commandes, `dashboard/src/lib/` pur, `src/data/loader.ts` seul `fetch`, règle des tests e2e) ;
+    arborescence du dashboard dans `02-architecture.md` (`lib/data.ts`, jamais créé, retiré). 2 tests ajoutés.
 
 - [ ] **T26** Smoke test réel (manuel) — R1, R2, R6, R12, R15, R17
   - Tests : aucun test automatisé. Procédure : `uv run th export` sur les données réelles du dépôt, `npm run build`

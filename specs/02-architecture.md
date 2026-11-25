@@ -77,8 +77,15 @@ TradingHelper/
 │   └── orchestration/ commit_message.py (pur, message de commit des workflows)
 ├── tests/                       # miroir de src/ + fixtures/ (données figées)
 ├── research/                    # Notebooks d'exploration (non importés)
-├── dashboard/                   # App Vite
-│   ├── src/ (pages/, components/, lib/data.ts, types/ générés depuis schemas/)
+├── dashboard/                   # App Vite + Preact (F09)
+│   ├── src/
+│   │   ├── lib/                 # pur : formats, dates de séance, routes, séries, marqueurs, thème (Vitest)
+│   │   ├── data/                # loader.ts (seul `fetch`, cache, erreurs typées), hooks de chargement
+│   │   ├── pages/, components/, hooks/
+│   │   ├── charts/              # priceChart.ts (lightweight-charts, chargé à la demande)
+│   │   └── types/               # générés depuis schemas/ (`npm run gen:types`)
+│   ├── e2e/                     # tests Playwright (desktop, mobile, base /TradingHelper/)
+│   ├── tests/fixtures/          # ✅ commité : jeux d'export figés (tests/dashboard_fixtures.py)
 │   └── public/data/             # ❌ non commité, rempli par `th export` en CI
 ├── specs/                       # SDD (ce dossier)
 ├── scripts/ci/commit-and-push.sh # commit + push des données par le bot (daily, backfill, weekly-train)

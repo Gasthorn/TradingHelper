@@ -175,7 +175,19 @@ puis `config/` à la racine du dépôt (trouvée en remontant depuis le dossier 
 URL publique : <https://gasthorn.github.io/TradingHelper/>, publiée par GitHub Actions après chaque
 run de données (voir [Mise en service](#mise-en-service)).
 
-En local :
+Site statique (Vite, TypeScript, Preact), routé par hash, lisible sur mobile, en thème clair, sombre ou
+système. Le bandeau « Outil expérimental et éducatif » est affiché sur toutes les pages, avec la date des
+données et une alerte « Données périmées » au-delà de 3 séances de retard.
+
+| Page | Contenu |
+|---|---|
+| `#/` | Vue d'ensemble : dernier cours, variation du jour et courbe des 60 dernières séances de chaque symbole |
+| `#/ticker/<SYMBOLE>` | Chandeliers, volume, SMA20/50/200, Bollinger, RSI14, période (1M à Max), signaux BUY/SELL |
+| autre | « Page introuvable », avec un lien vers l'accueil |
+
+Les pages Portfolios, Models et Health arrivent avec les stratégies (milestone M3).
+
+### En local
 
 ```bash
 uv run th export                                    # données de dashboard/public/data/ (à la racine)
@@ -186,6 +198,25 @@ TH_DASHBOARD_BASE=/TradingHelper/ npm run build     # build avec le chemin de ba
 ```
 
 Les données affichées (`dashboard/public/data/`) sont générées par `th export` et ne sont jamais commitées.
+
+### Tests
+
+```bash
+cd dashboard
+npm test                          # tests unitaires (Vitest) de src/lib/, sous deux fuseaux horaires
+npx playwright install chromium   # une fois : navigateur des tests de bout en bout
+npm run test:e2e                  # tests de bout en bout (Playwright) : bureau, mobile 375 px, base /TradingHelper/
+npm run lighthouse                # mesure de performance de la vue d'ensemble (médiane de 3, seuil 90)
+```
+
+Les tests e2e ne lisent jamais `dashboard/public/data/` : ils servent des jeux de données figés,
+`dashboard/tests/fixtures/` (`empty`, `m1`, `m1-signals`), produits par l'export à partir de données
+synthétiques. Après une évolution de l'export ou des schémas, les régénérer (le test `pytest` correspondant
+échoue tant qu'ils sont périmés) :
+
+```bash
+uv run python tests/dashboard_fixtures.py           # --check : vérifier sans écrire
+```
 
 ## Mise en service
 
