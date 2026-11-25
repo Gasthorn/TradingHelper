@@ -328,13 +328,18 @@
     test P8 construit depuis la fixture, thème en `useLayoutEffect` + `expect.poll`). Run 45716109823 au commit
     `585ef83` : `python` 28 s, `dashboard` 1 min 11 s, les deux verts.
 
-- [ ] **T24** Mesure Lighthouse — R26
+- [x] **T24** Mesure Lighthouse — R26
   - Tests : aucun test automatisé (hors CI, décision Q6 de la spec). Commande : `npm run lighthouse`.
   - Fichiers : `dashboard/package.json` (devDependency `lighthouse`, script `lighthouse`), `package-lock.json`,
     `dashboard/scripts/lighthouse.mjs` (build `dist-lh/` avec la fixture `m1` copiée dans `data/`, `vite preview`,
     3 mesures mobile avec le Chromium de Playwright, médiane, octets transférés, code 1 sous les seuils).
   - Fini quand : `npm run lighthouse` sort en 0 avec score médian ≥ 90 et < 5 Mo transférés ; résultats (3 scores,
     LCP, octets) consignés dans cette tâche. Si le score est insuffisant : s'arrêter et mesurer avant d'optimiser.
+  - Fait (2026-11-25) : `lighthouse` 13.6.0. Chromium de Playwright lancé avec un port de débogage, auquel
+    Lighthouse se connecte (configuration mobile par défaut, throttling simulé) ; build `dist-lh/` sans `public/`,
+    servi par `vite preview` sur le port 4175 ; garde-fou : échec si `overview.json` n'a pas été chargé.
+    Résultat (fixture `m1`) : scores 100 / 100 / 100 (médiane 100), LCP 0,75 s, FCP 0,75 s, TBT 0 à 30 ms,
+    CLS 0,014, 17,3 Ko transférés.
 
 - [ ] **T25** Documentation — R23, R24, R25, R26
   - Tests : `tests/test_repo_hygiene.py::test_readme_documents_dashboard` (section Dashboard : pages livrées,
