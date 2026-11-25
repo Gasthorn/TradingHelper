@@ -315,7 +315,7 @@
 
 ## Intégration continue, performance, documentation
 
-- [ ] **T23** Tests du dashboard en CI — R25
+- [x] **T23** Tests du dashboard en CI — R25
   - Tests : `tests/test_repo_hygiene.py::test_ci_dashboard_job_runs_dashboard_tests` (le job `dashboard` exécute
     `npm test`, installe Chromium avec `--with-deps` et exécute `npm run test:e2e`, dans cet ordre, après le contrôle des
     types générés) ; tests existants : timeout ≤ 15, actions épinglées par SHA.
@@ -323,6 +323,10 @@
     `@playwright/test`, `npx playwright install --with-deps chromium`, `npm run test:e2e`, `timeout-minutes: 15`),
     `tests/test_repo_hygiene.py`.
   - Fini quand : qualité verte ; la CI de la PR passe les deux jobs ; durée du job `dashboard` relevée dans cette tâche.
+  - Fait (2026-11-25) : `actions/cache` v6.1.0 épinglée par SHA, timeout 15 min. PR #10 : premier run en échec
+    (2 tests e2e) corrigé par `585ef83` (builds e2e sans `public/` pour que le local reproduise la CI, manifest du
+    test P8 construit depuis la fixture, thème en `useLayoutEffect` + `expect.poll`). Run 45716109823 au commit
+    `585ef83` : `python` 28 s, `dashboard` 1 min 11 s, les deux verts.
 
 - [ ] **T24** Mesure Lighthouse — R26
   - Tests : aucun test automatisé (hors CI, décision Q6 de la spec). Commande : `npm run lighthouse`.
