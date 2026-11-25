@@ -379,8 +379,40 @@ def test_readme_mentions_dashboard_url_and_github_settings() -> None:
     readme = _readme()
 
     assert "github.io/TradingHelper/" in readme
-    assert "active après F10" in readme
-    assert "Read and write permissions" in readme  # réglage manuel exigé par F10 R7
+    assert "active après F10" not in readme  # F10 livre le déploiement
+    # F10 R13 : les écritures sont accordées par les clés `permissions` des workflows ; le
+    # réglage du dépôt reste en lecture seule.
+    assert "Read and write permissions" not in readme
+
+
+def _readme_section(heading: str) -> str:
+    """Texte de la section `## heading` du README, jusqu'à la section de même niveau suivante."""
+    match = re.search(rf"^## {re.escape(heading)}\n(.*?)(?=^## |\Z)", _readme(), re.M | re.S)
+    assert match is not None, f"section « {heading} » absente du README"
+    return " ".join(match.group(1).split())  # retours à la ligne du texte ignorés
+
+
+def test_readme_has_mise_en_service_section() -> None:
+    """F10 R13 : réglages manuels et relances documentés."""
+    section = _readme_section("Mise en service")
+
+    assert "Pages → Build and deployment → Source** : « GitHub Actions »" in section
+    assert "Read repository contents" in section
+    assert "`permissions`" in section
+    assert "github-actions[bot]" in section  # protection de `main`
+    for workflow in ("daily", "backfill", "deploy-pages"):
+        assert f"`{workflow}`" in section, workflow
+    assert "Run workflow" in section  # relance manuelle (workflow_dispatch)
+
+
+def test_readme_documents_actions_limits() -> None:
+    """F10 R15 : limites de GitHub Actions acceptées et documentées."""
+    section = _readme_section("Mise en service")
+
+    assert "un seul run en attente" in section  # file d'attente `concurrency`
+    assert "retardés ou sautés" in section  # cron
+    assert "déploiement échoue" in section
+    assert "notifications" in section
 
 
 def test_license_is_mit() -> None:

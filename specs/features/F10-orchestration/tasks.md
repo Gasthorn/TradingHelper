@@ -116,7 +116,7 @@
 
 ## Documentation
 
-- [ ] **T11** README « Mise en service » et limites de GitHub Actions — R13, R15
+- [x] **T11** README « Mise en service » et limites de GitHub Actions — R13, R15
   - Tests : `tests/test_repo_hygiene.py::test_readme_has_mise_en_service_section` (Pages « GitHub Actions »,
     « Read repository contents », protection de `main` et `github-actions[bot]`, relance manuelle des trois workflows),
     `::test_readme_documents_actions_limits` (un seul run en attente par groupe, retards du cron, déploiement en échec,
