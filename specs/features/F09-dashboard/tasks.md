@@ -353,7 +353,7 @@
     (commandes, `dashboard/src/lib/` pur, `src/data/loader.ts` seul `fetch`, règle des tests e2e) ;
     arborescence du dashboard dans `02-architecture.md` (`lib/data.ts`, jamais créé, retiré). 2 tests ajoutés.
 
-- [ ] **T26** Smoke test réel (manuel) — R1, R2, R6, R12, R15, R17
+- [x] **T26** Smoke test réel (manuel) — R1, R2, R6, R12, R15, R17
   - Tests : aucun test automatisé. Procédure : `uv run th export` sur les données réelles du dépôt, `npm run build`
     puis `npm run preview` ; parcourir `#/`, trois fiches ticker (dont SPY), `#/inconnu`, dans les deux thèmes et à
     375 px ; puis un build avec `TH_DASHBOARD_BASE=/TradingHelper/`.
@@ -361,6 +361,19 @@
     transférées sur l'Overview et une fiche, erreurs console).
   - Fini quand : 21 lignes sur l'Overview, fiches lisibles avec indicateurs, aucune erreur console, aucune requête
     `tickers/*` sur l'Overview.
+  - Résultat (2026-11-26, données du dépôt, `npm run build` puis `vite preview`, navigateur intégré) :
+    - `th export` : 24 fichiers, 8 263 Ko, `data_as_of` 2026-11-24 ; en-tête « Données au 24/11/2026 », sans
+      alerte (1 séance de retard le 26/11) ;
+    - Overview : 21 lignes, sections stratégies vides, requêtes de données limitées à `manifest.json` et
+      `overview.json?v=…`, 19,9 Ko transférés au total ;
+    - fiches SPY (indice de référence), META, NVDA, AAPL : 128 barres en 6M (26/05 → 24/11/2026), SMA20/50,
+      volume, RSI ; SPY en Max : 4 250 barres depuis le 04/01/2010, SMA200 activée ; 0 marqueur (aucun signal) ;
+      `tickers/SPY.json` 151,5 Ko transférés (412,8 Ko bruts), module du graphique 57,1 Ko ;
+    - `#/inconnu` : « Page introuvable » ; thème sombre appliqué au graphique sans recréation ; 375 × 812 : aucun
+      défilement horizontal sur `#/` et `#/ticker/AAPL` ;
+    - aucune erreur console sur l'ensemble du parcours ;
+    - build `TH_DASHBOARD_BASE=/TradingHelper/` : `check:dist` OK, assets sous `/TradingHelper/` (sous Git Bash,
+      `MSYS_NO_PATHCONV=1` est nécessaire, sinon le chemin est converti en chemin Windows).
 
 - [ ] **T_final** Vérification : tous les critères d'acceptation M1 de la spec (→ `/spec-verify F09`)
 
