@@ -40,9 +40,9 @@ avec des outils de qualité et une configuration validée dès le premier commit
 
 ### Dashboard
 - **R11** `dashboard/` DOIT contenir une app Vite + TypeScript en Preact (Q1) avec `tsconfig.json` en `strict: true`. `package-lock.json` DOIT être commité. `package.json` DOIT exposer les scripts `lint` (ESLint + typescript-eslint), `typecheck` (`tsc --noEmit`) et `build`. La version de Node DOIT être fixée (`.nvmrc` + `engines`).
-- **R12** `npm run build` DOIT produire `dashboard/dist/index.html` affichant « Hello TradingHelper » et le bandeau exact de P8 : « Outil expérimental et éducatif. Ceci n'est pas un conseil en investissement. »
+- **R12** `npm run build` DOIT produire `dashboard/dist/index.html` de titre « TradingHelper » (« Hello TradingHelper » jusqu'à F09, décision 1 du plan F09) et affichant le bandeau exact de P8 : « Outil expérimental et éducatif. Ceci n'est pas un conseil en investissement. »
 - **R13** Le build DOIT réussir en l'absence de `dashboard/public/data/` (état normal avant F08).
-- **R14** Le `base` Vite DOIT être configurable par variable d'environnement (défaut `/`, en production `/TradingHelper/`), en prévision de F09 R7.
+- **R14** Le `base` Vite DOIT être configurable par variable d'environnement (défaut `/`, en production `/TradingHelper/`), en prévision de F09 R10.
 
 ### CI
 - **R15** `.github/workflows/ci.yml` DOIT se déclencher sur `push` vers `main` et sur `pull_request`, avec deux jobs indépendants :
@@ -70,7 +70,7 @@ avec des outils de qualité et une configuration validée dès le premier commit
 - [x] Les tests de config passent avec le réseau bloqué. (R9)
 - [x] `TH_CONFIG_DIR=<dossier invalide> uv run th version` sort en 2 sans stacktrace. (R10)
 - [x] `cd dashboard && npm ci && npm run lint && npm run typecheck && npm run build` sort en 0. (R11)
-- [x] `dashboard/dist/index.html` contient « Hello TradingHelper » et le texte exact de P8. (R12)
+- [x] `dashboard/dist/index.html` a pour titre « TradingHelper » (« Hello TradingHelper » avant F09 T11) et contient le texte exact de P8. (R12)
 - [x] Le build passe sans `dashboard/public/data/`. (R13)
 - [x] Un build avec la variable de `base` définie à `/TradingHelper/` produit des chemins d'assets préfixés. (R14)
 - [x] La CI est verte sur une PR. (R15, R17)
@@ -82,7 +82,7 @@ avec des outils de qualité et une configuration validée dès le premier commit
 
 ## Hors périmètre
 - Ingestion (F01), commande `th schemas` et vérification de `schemas/` en CI (F01 R17).
-- Workflows `daily`, `deploy-pages`, `weekly-train`, `backfill` (F10) ; test e2e smoke du dashboard (F09 R8).
+- Workflows `daily`, `deploy-pages`, `weekly-train`, `backfill` (F10) ; test e2e smoke du dashboard (F09 R25).
 - Seuil de couverture ≥ 90 % sur `backtest/` et `strategies/` (P9) : installé avec F04/F05, quand ces paquets ont du code.
 - Schéma complet de `backtest.yaml` et `strategies.yaml` : F00 pose des modèles minimaux, étendus par F04, F05 et F06.
 - Génération des types TS depuis `schemas/` (F08).

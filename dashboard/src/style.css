@@ -1,22 +1,70 @@
+/*
+ * Thème (spec F09 — R7, R8) : `data-theme` posé sur <html> par le script inline de index.html
+ * avant le premier rendu, puis par `hooks/useTheme.ts`. Contrastes WCAG AA vérifiés par axe-core
+ * dans les deux thèmes (e2e/a11y.spec.ts). Haussier / baissier ne reposent jamais sur la seule
+ * couleur (flèche, signe, forme).
+ */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #4d4d4d;
+  --surface: #f3f4f6;
+  --border: #8a8f98;
+  --link: #0b57d0;
+  --focus: #0b57d0;
+  --up: #0a6b37;
+  --down: #b3261e;
   --disclaimer-bg: #fff4d6;
   --disclaimer-fg: #5c4400;
   --disclaimer-border: #e8c766;
+  --grid: #e5e7eb;
+  --volume: #c4c8cf;
+  --sma20: #1d4ed8;
+  --sma50: #b45309;
+  --sma200: #7c3aed;
+  --bollinger: #6b7280;
+  --rsi: #0e7490;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   line-height: 1.5;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --disclaimer-bg: #3a2f10;
-    --disclaimer-fg: #f5dc9a;
-    --disclaimer-border: #6b5520;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121417;
+  --fg: #e8e8e8;
+  --muted: #b4b8bf;
+  --surface: #1f2329;
+  --border: #6b7280;
+  --link: #8ab4f8;
+  --focus: #8ab4f8;
+  --up: #4cc38a;
+  --down: #ff8a80;
+  --disclaimer-bg: #3a2f10;
+  --disclaimer-fg: #f5dc9a;
+  --disclaimer-border: #6b5520;
+  --grid: #262a30;
+  --volume: #3b4048;
+  --sma20: #7aa2ff;
+  --sma50: #f5a524;
+  --sma200: #c4a1ff;
+  --bollinger: #9aa0a6;
+  --rsi: #4dd0e1;
 }
 
 body {
   margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+a {
+  color: var(--link);
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
 /* Bandeau P8 : collé en haut de page, jamais masqué par le défilement. */
@@ -35,4 +83,205 @@ body {
 .site-header,
 main {
   padding: 0 1rem;
+}
+
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding-block: 0.75rem;
+}
+
+.site-title {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.error-panel {
+  margin-block: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid currentColor;
+  border-left-width: 4px;
+  border-radius: 4px;
+}
+
+.error-panel__title {
+  margin-top: 0;
+  font-weight: 700;
+}
+
+.empty-state,
+.loading {
+  font-style: italic;
+}
+
+.data-date {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.stale-badge {
+  padding: 0.125rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.stale-badge::before {
+  content: "⚠ ";
+}
+
+.theme-toggle {
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.scroll-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.data-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.data-table .num {
+  text-align: right;
+}
+
+.change[data-direction="up"] {
+  color: var(--up);
+}
+
+.change[data-direction="down"] {
+  color: var(--down);
+}
+
+.sparkline {
+  display: block;
+  color: var(--link);
+}
+
+.tag {
+  margin-left: 0.5rem;
+  padding: 0 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.subtitle {
+  margin-top: -0.5rem;
+  color: var(--muted);
+}
+
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  margin-block: 1rem;
+}
+
+.control-label {
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.segmented,
+.overlays {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.overlays {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.overlays legend {
+  float: left;
+}
+
+.segmented__item,
+.check,
+.strategy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 44px;
+  min-width: 44px;
+  cursor: pointer;
+}
+
+.strategy select {
+  min-height: 44px;
+  font: inherit;
+}
+
+.price-chart {
+  width: 100%;
+  height: 440px;
+}
+
+.check--disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.hint {
+  font-size: 0.875rem;
+}
+
+.marker-legend {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+}
+
+.marker-legend li[data-action="BUY"] .marker-legend__action {
+  color: var(--up);
+}
+
+.marker-legend li[data-action="SELL"] .marker-legend__action {
+  color: var(--down);
+}
+
+/* Lien autonome (hors texte courant) : cible tactile de 44 px (R9). */
+.action-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }

@@ -3,17 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hello TradingHelper</title>
+    <title>TradingHelper</title>
+    <!-- Thème posé avant le premier rendu, sans flash (F09 R7) ; même clé que src/lib/theme.ts. -->
+    <script>
+      (function () {
+        var pref = null;
+        try {
+          pref = localStorage.getItem("th-theme");
+        } catch (e) {}
+        if (pref !== "light" && pref !== "dark") {
+          pref = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.dataset.theme = pref;
+      })();
+    </script>
   </head>
   <body>
-    <!-- Bandeau P8 en HTML statique : visible en permanence, même si le JavaScript échoue. -->
+    <!-- Bandeau P8 en HTML statique : visible sur toutes les routes, même si le JavaScript échoue (F09 R5). -->
     <aside class="disclaimer" role="note">
       Outil expérimental et éducatif. Ceci n'est pas un conseil en investissement.
     </aside>
-    <header class="site-header">
-      <h1>Hello TradingHelper</h1>
-    </header>
-    <main id="app"></main>
+    <div id="app"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

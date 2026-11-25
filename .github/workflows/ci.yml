@@ -1,5 +1,6 @@
 # Intégration continue (spec F00 — R15, R16, R17).
-# Lint, typage, tests Python ; lint, typage, build et vérification du dashboard.
+# Lint, typage, tests Python ; lint, typage, tests (Vitest, e2e Playwright), build et vérification
+# du dashboard (F09 R25).
 # Aucun secret requis : fonctionne aussi sur les PR provenant d'un fork.
 name: ci
 
@@ -39,7 +40,7 @@ jobs:
 
   dashboard:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: dashboard
@@ -63,6 +64,21 @@ jobs:
         run: npm run lint
       - name: Typage
         run: npm run typecheck
+      # Spec F09 R23 : logique pure de src/lib/ (Vitest, deux fuseaux).
+      - name: Tests unitaires
+        run: npm test
+      # Spec F09 R25 : Chromium seul, en cache par version de @playwright/test.
+      - name: Version de Playwright
+        id: playwright
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - name: Navigateur des tests e2e
+        run: npx playwright install --with-deps chromium
+      - name: Tests e2e (fixtures, sans réseau de données)
+        run: npm run test:e2e
       - name: Build (base "/")
         run: npm run build
       - name: Vérification du build (titre, bandeau P8, assets)

@@ -161,8 +161,12 @@
        [45669443008](https://github.com/Gasthorn/TradingHelper/actions/runs/45669443008) : exécutés l'un après
        l'autre, mais le second, parti du SHA de son déclenchement (`0586a75`) et non de la pointe poussée par le
        premier (`e868138`), entre en conflit sur `data/runs/2026-11-24.json` (3 tentatives, rien poussé, run rouge).
-       Correctif : checkout de `github.ref` dans les jobs `pipeline` (`test_pipeline_checks_out_branch_tip`).
-       **À refaire après fusion du correctif.**
+       Correctif : checkout de `github.ref` dans les jobs `pipeline` (`test_pipeline_checks_out_branch_tip`, PR #9).
+       ✅ Refait après fusion : [45671867859](https://github.com/Gasthorn/TradingHelper/actions/runs/45671867859) et
+       [45671872427](https://github.com/Gasthorn/TradingHelper/actions/runs/45671872427), tous deux déclenchés sur
+       `bd2aeba` : exécutés l'un après l'autre (pipeline 18:07:28→18:07:49 puis 18:08:41→18:08:56), le second parti de
+       `4c4b2a1` poussé par le premier ; commits `4c4b2a1` puis `d876598`, chacun poussé à la 1re tentative ; deux
+       deploys verts ; `manifest.json` publié au SHA `d876598…`.
     3. ✅ [45669886773](https://github.com/Gasthorn/TradingHelper/actions/runs/45669886773) : branche de test, commit
        sauté, deploy sauté, run vert.
     4. ✅ [45670168209](https://github.com/Gasthorn/TradingHelper/actions/runs/45670168209) : `start` sans `full` →

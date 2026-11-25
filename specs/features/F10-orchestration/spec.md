@@ -47,7 +47,7 @@ dashboard ; à la demande, rattraper un historique ; en M3, produire signaux, po
 - `concurrency: { group: pages, cancel-in-progress: false }` — jamais `data-writer` (R2).
 - `permissions: { contents: read, pages: write, id-token: write }`.
 - Checkout de `ref` (défaut : `github.sha`) → `th export` avec `TH_GIT_SHA` = SHA extrait → `npm ci` →
-  `npm run build` avec `TH_DASHBOARD_BASE=/<nom du dépôt>/` (F00 R14, F09 R7) → `npm run check:dist` →
+  `npm run build` avec `TH_DASHBOARD_BASE=/<nom du dépôt>/` (F00 R14, F09 R10) → `npm run check:dist` →
   `actions/upload-pages-artifact` (`dashboard/dist`) → `actions/deploy-pages` (environnement `github-pages`).
 
 ### `weekly-train.yml` `[M3]`
@@ -58,7 +58,7 @@ dashboard ; à la demande, rattraper un historique ; en M3, produire signaux, po
   traders défini par F05 R3) → deploy.
 
 ### `ci.yml`
-- Créé par F00 (R15–R17). F10 n'y ajoute rien : le test e2e smoke du dashboard appartient à F09 (R8).
+- Créé par F00 (R15–R17). F10 n'y ajoute rien : le test e2e smoke du dashboard appartient à F09 (R25).
 
 ## Exigences
 
@@ -169,7 +169,7 @@ dashboard ; à la demande, rattraper un historique ; en M3, produire signaux, po
 - [ ] Un `workflow_dispatch` de `weekly-train` commite le registre et déploie. (Workflows)
 
 ## Hors périmètre
-- Test e2e smoke du dashboard : porté par F09 (R8), y compris son ajout à `ci.yml`.
+- Test e2e smoke du dashboard : porté par F09 (R25), y compris son ajout à `ci.yml`.
 - Une section `run-report` du rapport de run : chaque commande écrit déjà sa section, avec ses durées (contrat §6).
 
 ## Dépendances introduites
@@ -187,7 +187,7 @@ Aucune (PyYAML, déjà présent, sert au test des workflows).
 - **Q5** Pas de déploiement sans nouveau commit, sauf `workflow_dispatch` (R9).
 - **Q6** `git_sha` : checkout du SHA poussé + variable `TH_GIT_SHA`, et modification de F08 R11 (R8).
 - **Q7** Logique testable en Python : `th commit-message` ; les workflows ne contiennent que de l'enchaînement (R5).
-- **Q8** Le test e2e Playwright reste à F09 (R8) ; F10 ne modifie pas `ci.yml`.
+- **Q8** Le test e2e Playwright reste à F09 (R25) ; F10 ne modifie pas `ci.yml`.
 - **Q9** `deploy-pages` se déclenche sur les pushes humains touchant dashboard, code, config, données ou modèles (R10).
 - **Q10** Weekly : sans input `family`, toutes les familles ML actives ; commit de `models/registry/**` et du fichier de
   distribution des random traders (emplacement fixé par F05 R3).

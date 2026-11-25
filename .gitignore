@@ -11,6 +11,10 @@ htmlcov/
 # --- Dashboard ---
 node_modules/
 dashboard/dist/
+# Builds et résultats des tests e2e (F09 R25).
+dashboard/dist-*/
+dashboard/test-results/
+dashboard/playwright-report/
 # Données exportées par `th export`, recalculées en CI (P5) : jamais commitées.
 dashboard/public/data/
 

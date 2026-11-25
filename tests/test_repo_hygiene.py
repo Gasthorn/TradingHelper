@@ -21,6 +21,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 IGNORED_PATHS = [
     "dashboard/public/data/overview.json",
     "dashboard/dist/index.html",
+    "dashboard/dist-base/index.html",  # F09 R25 : builds e2e
+    "dashboard/test-results/results.json",
+    "dashboard/playwright-report/index.html",
     "node_modules/pkg/index.js",
     "dashboard/node_modules/pkg/index.js",
     ".venv/pyvenv.cfg",
@@ -539,6 +542,27 @@ def test_ci_dashboard_job_checks_generated_types() -> None:
     assert _step_index("dashboard", "npm ci") < gen < _step_index("dashboard", "npm run typecheck")
 
 
+def test_ci_dashboard_job_runs_dashboard_tests() -> None:
+    """F09 R25 : le job `dashboard` lance Vitest, installe Chromium (et ses dépendances système),
+    puis les tests e2e Playwright, après le contrôle des types générés."""
+    gen = _step_index("dashboard", "npm run gen:types")
+    unit = _step_index("dashboard", "npm test")
+    install = _step_index("dashboard", "playwright install --with-deps chromium")
+    e2e = _step_index("dashboard", "npm run test:e2e")
+
+    assert gen < unit < install < e2e
+
+
+def test_ci_dashboard_job_caches_playwright_browsers() -> None:
+    """F09 (T23) : navigateurs Playwright en cache, clé liée à la version de @playwright/test."""
+    cache = [s for s in _steps("dashboard") if str(s.get("uses", "")).startswith("actions/cache@")]
+
+    assert len(cache) == 1
+    assert cache[0]["with"]["path"] == "~/.cache/ms-playwright"
+    assert "playwright" in str(cache[0]["with"]["key"])
+    assert _steps("dashboard").index(cache[0]) < _step_index("dashboard", "playwright install")
+
+
 def test_readme_documents_export() -> None:
     """F08 (T23) : commande `th export`, `--out`, codes de sortie, types TS générés."""
     readme = _readme()
@@ -592,3 +616,44 @@ def test_docs_list_orchestration_modules() -> None:
     assert "scripts/ci/commit-and-push.sh" in claude_md
     assert "orchestration/" in architecture
     assert "commit-and-push.sh" in architecture
+
+
+def test_readme_documents_dashboard() -> None:
+    """F09 (T25) : pages livrées, développement local, tests et régénération des fixtures."""
+    readme = _readme()
+    section = readme.split("## Dashboard", 1)[1].split("\n## ", 1)[0]
+
+    for expected in (
+        "#/ticker/",
+        "Page introuvable",
+        "npm run dev",
+        "npm test",
+        "npm run test:e2e",
+        "npx playwright install chromium",
+        "npm run lighthouse",
+        "uv run python tests/dashboard_fixtures.py",
+        "dashboard/tests/fixtures",
+    ):
+        assert expected in section, expected
+
+
+def test_docs_list_dashboard_layout() -> None:
+    """F09 (T25) : `dashboard/src/lib/` parmi les modules purs, commandes du dashboard,
+    arborescence du dashboard dans l'architecture."""
+    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    architecture = (REPO_ROOT / "specs" / "02-architecture.md").read_text(encoding="utf-8")
+    lines = claude_md.splitlines()
+    pure_line = next(line for line in lines if line.startswith("- Fonctions pures"))
+    pure, _side_effects = pure_line.split("effets de bord", 1)
+
+    assert "dashboard/src/lib/" in pure
+    for command in (
+        "npm test",
+        "npm run test:e2e",
+        "npm run lighthouse",
+        "uv run python tests/dashboard_fixtures.py",
+    ):
+        assert command in claude_md, command
+    for part in ("lib/", "data/", "pages/", "components/", "charts/", "e2e/", "tests/fixtures/"):
+        assert part in architecture.split("├── dashboard/", 1)[1].split("├── specs/", 1)[0], part
+    assert "lib/data.ts" not in architecture

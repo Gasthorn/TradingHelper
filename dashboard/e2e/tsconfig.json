@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": [],
+    "resolveJsonModule": true
+  },
+  "include": [
+    "**/*.ts",
+    "../tests/fixtures/**/*.json"
+  ]
+}

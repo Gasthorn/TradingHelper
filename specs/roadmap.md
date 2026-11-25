@@ -28,7 +28,7 @@ Pages Portfolios/Health complètes, e2e, Lighthouse, documentation.
 | F01 | Ingestion yFinance | M1 | F00 | ✔️ Done |
 | F02 | Qualité des données | M1 | F01 | ✔️ Done |
 | F08 | Export dashboard (partiel, crée `features/indicators.py`) | M1 | F01, F02 | ✔️ Done |
-| F09 | Dashboard (Overview, Ticker) | M1 | F08 | 📝 Draft |
+| F09 | Dashboard (Overview, Ticker) | M1 | F08 | ✔️ Done |
 | F10 | Orchestration (daily, deploy, backfill) | M1 | F01, F02, F08 | 🚧 In progress |
 | F03 | Features & labels | M2 | F01 | 📝 Draft |
 | F04 | Moteur de backtest & métriques | M2 | F01 | 📝 Draft |
@@ -36,7 +36,7 @@ Pages Portfolios/Health complètes, e2e, Lighthouse, documentation.
 | F06 | Modèles IA & registre | M3 | F03, F04, F05 | 📝 Draft |
 | F07 | Signaux & paper trading | M3 | F04–F06 | 📝 Draft |
 | F08 | Export dashboard (complet) | M3 | F04–F07 (pré-requis de contrat : voir spec F08) | ✅ Approved |
-| F09 | Dashboard (Portfolios, Models, Health) | M3/M4 | F08 | 📝 Draft |
+| F09 | Dashboard (Portfolios, Models, Health) | M3/M4 | F08 (M3) | ✅ Approved (pré-requis de contrat : voir spec F09) |
 | F10 | Orchestration (signal/paper du daily, weekly-train) | M3 | F05–F07 | ✅ Approved |
 
 Ordre conseillé : F00 → F01 → F02 → F08(partiel) → F10(daily+deploy) → F09(M1) → F04 → F03 → F05 → F06 → F07 → reste.
