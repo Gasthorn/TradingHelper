@@ -241,6 +241,15 @@ def test_pipeline_step_order(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", DATA_WRITERS)
+def test_pipeline_checks_out_branch_tip(name: str) -> None:
+    """R2 : un run mis en attente par `data-writer` part de la pointe de la branche au démarrage
+    du job, pas du SHA de son déclenchement (sinon conflit avec le commit du run précédent)."""
+    checkout = _step_using(name, "pipeline", "actions/checkout")
+
+    assert checkout["with"]["ref"] == "${{ github.ref }}"
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
 def test_pipeline_outputs(name: str) -> None:
     assert _jobs(name)["pipeline"]["outputs"] == {
         "pushed_sha": "${{ steps.commit.outputs.pushed_sha }}",

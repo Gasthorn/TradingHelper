@@ -126,6 +126,9 @@ class Strategy(Protocol):
   poussé pendant le run (et `GITHUB_*` n'est pas surchargeable) → le déploiement fait le checkout du SHA poussé et
   transmet `TH_GIT_SHA` à `th export` (F10 R8).
 - `git diff --quiet` ignore les fichiers non suivis → tester `git status --porcelain` avant de commiter (F10 R3).
+- `actions/checkout` récupère par défaut le SHA du déclenchement : un run mis en attente par `data-writer` repartirait
+  d'un `main` périmé et entrerait en conflit avec le commit du run précédent → les jobs qui commitent font le checkout
+  de `github.ref` (pointe de la branche au démarrage du job).
 
 ## Volumétrie estimée
 - 1 barre ≈ 90 octets → 20 tickers × 10 ans ≈ 4,5 Mo de JSON brut. Croissance ≈ 450 Ko/an. Acceptable pour git.

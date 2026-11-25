@@ -26,7 +26,11 @@ jobs:
       head_sha: ${{ steps.commit.outputs.head_sha }}
       ingest_exit_code: ${{ steps.ingest.outputs.exit_code }}
     steps:
+      # Pointe de la branche au démarrage du job, pas le SHA du déclenchement : un run mis en
+      # attente par `data-writer` repart du commit poussé par le run précédent (R2).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           enable-cache: true
