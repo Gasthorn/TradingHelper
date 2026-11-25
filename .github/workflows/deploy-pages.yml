@@ -1,0 +1,87 @@
+# Publication du dashboard sur GitHub Pages (spec F10 — R1, R2, R8, R10–R12).
+# Réutilisable : appelé explicitement par daily / backfill (un push fait avec GITHUB_TOKEN ne
+# déclenche aucun workflow), et déclenché par un push humain sur main touchant le site ou ses
+# données.
+name: deploy-pages
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "SHA à publier (défaut : github.sha)"
+        type: string
+        required: false
+        default: ""
+  push:
+    branches: [main]
+    paths:
+      - "dashboard/**"
+      - "src/**"
+      - "config/**"
+      - "data/**"
+      - "models/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Groupe propre, jamais `data-writer` : un workflow appelé dans le groupe de son appelant se
+# bloque ou s'annule (R2).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      # R8 : le SHA publié est celui poussé par l'appelant, pas le commit déclencheur.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: true
+      - name: Installation (Python)
+        run: uv sync --locked
+      - name: Export des données (manifest au SHA extrait)
+        run: TH_GIT_SHA="$(git rev-parse HEAD)" uv run th export
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: dashboard/.nvmrc
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Installation (dashboard)
+        working-directory: dashboard
+        run: npm ci
+      - name: Build et vérification (base du dépôt)
+        working-directory: dashboard
+        env:
+          TH_DASHBOARD_BASE: /${{ github.event.repository.name }}/
+        run: |
+          npm run build
+          npm run check:dist
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dashboard/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -74,7 +74,7 @@
 
 ## Workflows
 
-- [ ] **T7** `deploy-pages.yml` — R1, R2, R8, R10, R11, R12
+- [x] **T7** `deploy-pages.yml` — R1, R2, R8, R10, R11, R12
   - Préalable : SHA des actions `actions/upload-pages-artifact` et `actions/deploy-pages` récupérés depuis leurs
     releases officielles (`gh api`), commentaire `# vX.Y.Z` ; `checkout`, `setup-uv`, `setup-node` aux mêmes SHA que `ci.yml`.
   - Tests : `tests/test_workflows.py` (helpers de lecture YAML mutualisés, clé `on` corrigée comme dans
