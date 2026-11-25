@@ -229,7 +229,7 @@
     dev ignore `dist-*/`, `test-results/`, `playwright-report/` (rechargements parasites pendant `test:e2e`
     constatés dans le navigateur). 58 tests e2e ; vérifié dans le navigateur sur SPY.
 
-- [ ] **T17** Graphique de prix (`lightweight-charts`) — R15, R16, R2, R8
+- [x] **T17** Graphique de prix (`lightweight-charts`) — R15, R16, R2, R8
   - Tests : `e2e/ticker.spec.ts::chart renders` (`data-bars` = nombre de barres de la période 6M), `::1M first bar`
     (`data-first-date` ≥ 2026-10-23), `::default overlays` (`data-overlays="sma20,sma50"`), `::toggle bollinger`,
     `::sma200 disabled short history` (BRK.B : case désactivée, mention « historique insuffisant »), `::hollow up candles`
@@ -240,6 +240,13 @@
     `dashboard/src/pages/Ticker.tsx` (`import()` dynamique, `setData`, `setOverlays`).
   - Fini quand : e2e vert ; `npm run build` produit un chunk séparé contenant `lightweight-charts` ; l'attribution
     TradingView est conservée ; qualité dashboard verte.
+  - Fait (2026-11-25) : `lightweight-charts` 5.3.0 ; chunk `priceChart-*.js` de 172 Ko (56 Ko gzip, contre ≈ 45 Ko
+    estimés au plan), bundle initial à 30 Ko (12 Ko gzip). Volume sur une échelle à part dans le panneau des
+    prix, RSI dans un 2e panneau (30 % de la hauteur). Attributs exposés : `data-bars`, `data-first-date`,
+    `data-last-date`, `data-overlays`, `data-up-style`, `data-down-style`, `data-panes`, `data-rsi-lines`.
+    Couleurs des séries en variables CSS par thème (`--sma20`…). Indicateur sans valeur → case désactivée
+    « (historique insuffisant) ». Test ajouté : Max = toute la série. 66 tests e2e ; vérifié dans le navigateur
+    sur AAPL réel (128 barres en 6M).
 
 - [ ] **T18** Marqueurs et détail P8 — R17, R8
   - Tests : `e2e/ticker.spec.ts::m1-signals markers` (fixture `m1-signals`, AAPL : `data-markers="2"`, légende listant

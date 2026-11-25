@@ -1,10 +1,12 @@
 /**
- * Fiche d'un symbole (spec F09 — R14, R16, R17, R18). Le graphique (`lightweight-charts`,
- * chargé dynamiquement) arrive en T17–T19 ; ici : résolution du symbole, chargement de
- * `tickers/{SYMBOL}.json`, sélecteurs de période, d'indicateurs et de stratégie, fiche
- * « Signal du jour » (vide en M1).
+ * Fiche d'un symbole (spec F09 — R14–R18) : résolution du symbole, chargement de
+ * `tickers/{SYMBOL}.json`, sélecteurs de période, d'indicateurs et de stratégie, graphique
+ * (`charts/priceChart.ts`, chargé par `import()` dynamique : hors du bundle initial, R2),
+ * fiche « Signal du jour » (vide en M1).
  */
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
+
+import type { Overlays, PriceChart } from "../charts/priceChart";
 
 import { EmptyState } from "../components/EmptyState";
 import { ErrorPanel } from "../components/ErrorPanel";
@@ -12,15 +14,9 @@ import { Loading } from "../components/Loading";
 import { useFile } from "../data/useData";
 import { PERIODS, type Period } from "../lib/dates";
 import { strategyOptions } from "../lib/markers";
+import { isAllNull, periodWindow } from "../lib/series";
 import type { ManifestFile, ManifestTicker } from "../types/export_manifest";
-import type { TickerFile } from "../types/export_ticker";
-
-export interface Overlays {
-  sma20: boolean;
-  sma50: boolean;
-  sma200: boolean;
-  bollinger: boolean;
-}
+import type { TickerFile, TickerSeries } from "../types/export_ticker";
 
 /** Premier affichage (décision Q10). */
 export const DEFAULT_OVERLAYS: Overlays = { sma20: true, sma50: true, sma200: false, bollinger: false };
@@ -65,10 +61,10 @@ function TickerContent({ manifest, ticker }: { manifest: ManifestFile; ticker: M
         <>
           <div class="chart-controls">
             <PeriodSelector value={period} onChange={setPeriod} />
-            <OverlaySelector value={overlays} onChange={setOverlays} />
+            <OverlaySelector value={overlays} unavailable={unavailableOverlays(file.data.series)} onChange={setOverlays} />
             <StrategySelector options={strategyOptions(file.data.markers)} value={strategy} onChange={setStrategy} />
           </div>
-          <div class="price-chart" data-testid="price-chart" />
+          <PriceChartView series={file.data.series} period={period} overlays={overlays} />
         </>
       )}
       <section aria-labelledby="signal-title">
@@ -103,24 +99,78 @@ function PeriodSelector({ value, onChange }: { value: Period; onChange: (p: Peri
   );
 }
 
-function OverlaySelector({ value, onChange }: { value: Overlays; onChange: (o: Overlays) => void }) {
+/** Indicateurs sans aucune valeur (ex. SMA200 sur moins de 200 barres) : non sélectionnables (R15). */
+function unavailableOverlays(series: TickerSeries): Set<keyof Overlays> {
+  const out = new Set<keyof Overlays>();
+  if (isAllNull(series.sma20)) out.add("sma20");
+  if (isAllNull(series.sma50)) out.add("sma50");
+  if (isAllNull(series.sma200)) out.add("sma200");
+  if (isAllNull(series.bb_upper)) out.add("bollinger");
+  return out;
+}
+
+function OverlaySelector({
+  value,
+  unavailable,
+  onChange,
+}: {
+  value: Overlays;
+  unavailable: ReadonlySet<keyof Overlays>;
+  onChange: (o: Overlays) => void;
+}) {
   return (
     <fieldset class="overlays">
       <legend class="control-label">Indicateurs</legend>
-      {(Object.keys(OVERLAY_LABELS) as (keyof Overlays)[]).map((key) => (
-        <label key={key} class="check">
-          <input
-            type="checkbox"
-            checked={value[key]}
-            onChange={(event) => {
-              onChange({ ...value, [key]: event.currentTarget.checked });
-            }}
-          />
-          {OVERLAY_LABELS[key]}
-        </label>
-      ))}
+      {(Object.keys(OVERLAY_LABELS) as (keyof Overlays)[]).map((key) => {
+        const disabled = unavailable.has(key);
+        return (
+          <label key={key} class={disabled ? "check check--disabled" : "check"}>
+            <input
+              type="checkbox"
+              checked={value[key] && !disabled}
+              disabled={disabled}
+              onChange={(event) => {
+                onChange({ ...value, [key]: event.currentTarget.checked });
+              }}
+            />
+            {OVERLAY_LABELS[key]}
+            {disabled && <span class="hint"> (historique insuffisant)</span>}
+          </label>
+        );
+      })}
     </fieldset>
   );
+}
+
+/** Conteneur du graphique : création après chargement du module, puis mises à jour. */
+function PriceChartView({ series, period, overlays }: { series: TickerSeries; period: Period; overlays: Overlays }) {
+  const host = useRef<HTMLDivElement>(null);
+  const [chart, setChart] = useState<PriceChart | null>(null);
+  const initialOverlays = useRef(overlays);
+
+  useEffect(() => {
+    let disposed = false;
+    let created: PriceChart | null = null;
+    void import("../charts/priceChart").then(({ createPriceChart }) => {
+      if (disposed || host.current === null) return;
+      created = createPriceChart(host.current, initialOverlays.current);
+      setChart(created);
+    });
+    return () => {
+      disposed = true;
+      created?.destroy();
+    };
+  }, []);
+
+  useEffect(() => {
+    chart?.setData(series, periodWindow(series.date, period));
+  }, [chart, series, period]);
+
+  useEffect(() => {
+    chart?.setOverlays(overlays);
+  }, [chart, overlays]);
+
+  return <div ref={host} class="price-chart" data-testid="price-chart" />;
 }
 
 /** Masqué sans marqueur (R4) ; « Toutes » = aucune restriction. */

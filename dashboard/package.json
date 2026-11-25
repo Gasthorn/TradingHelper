@@ -20,6 +20,7 @@
     "test:e2e": "node scripts/build-e2e.mjs && playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
+    "lightweight-charts": "^5.3.0",
     "preact": "^11.2.0"
   },
   "devDependencies": {
