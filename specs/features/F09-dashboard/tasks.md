@@ -59,12 +59,15 @@
     pour le sélecteur ; `periodWindow` par recherche dichotomique (ordre lexical des dates) ; série vide → fenêtre
     `{ from: 0, to: -1 }`. 34 tests ajoutés (17 × 2 fuseaux).
 
-- [ ] **T5** [P] Routes — R1, R14
+- [x] **T5** [P] Routes — R1, R14
   - Tests : `src/lib/routes.test.ts` : `#/`, `''`, `#` → overview ; `#/ticker/AAPL` ; `#/ticker/brk.b` → `BRK.B` ;
     `#/ticker/BRK%2DB` → `BRK-B` ; encodage invalide (`%E0%A4%A`) → `not_found` ; `#/ticker/` vide, `#/inconnu`,
     `#/portfolios`, `#/portfolio/x`, `#/models`, `#/health` → `not_found` (non livrées en M1) ; barre finale tolérée.
   - Fichiers : `dashboard/src/lib/routes.ts`, `dashboard/src/lib/routes.test.ts`.
   - Fini quand : tests verts ; qualité dashboard verte.
+  - Fait (2026-11-25) : `parseHash` ne lève jamais (encodage invalide → `not_found`) ; noms de route sensibles à la
+    casse, symbole mis en majuscules ; ajout de `tickerHash` (lien Overview → fiche, aller-retour testé).
+    40 tests (20 × 2 fuseaux).
 
 - [ ] **T6** [P] Marqueurs et enrichissement P8 — R17
   - Tests : `src/lib/markers.test.ts` : `strategyOptions` (uniques, triées, vide → `[]`) ; `visibleMarkers` filtre par
