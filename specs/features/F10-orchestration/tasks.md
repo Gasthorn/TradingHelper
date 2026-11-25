@@ -29,7 +29,7 @@
   - Fini quand : tests verts ; la lecture des rapports par l'export (F08) n'a pas changé de comportement
     (`tests/export/` vert) ; qualité verte.
 
-- [ ] **T3** `build_commit_message` (pur) — R5
+- [x] **T3** `build_commit_message` (pur) — R5
   - Tests : `tests/orchestration/test_commit_message.py::test_daily_without_rewrite`
     (`data: daily update 2026-11-23`), `::test_rewrite_symbols_sorted_deduplicated` (MSFT, AAPL, AAPL sur deux entrées
     → `(history rewrite: AAPL, MSFT)`), `::test_entries_before_since_ignored`, `::test_entry_at_since_included`

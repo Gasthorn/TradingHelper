@@ -251,6 +251,34 @@ def test_build_module_never_opens_files() -> None:
     assert calls == []
 
 
+#: F10 (T3) : `orchestration/commit_message.py` est pur : ni E/S, ni horloge, ni calendrier.
+COMMIT_MESSAGE_ALLOWED_IMPORTS = frozenset(
+    {"__future__", "collections", "datetime", "typing", "tradinghelper"}
+)
+
+
+def test_commit_message_module_is_pure() -> None:
+    path = REPO_ROOT / "src" / "tradinghelper" / "orchestration" / "commit_message.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            modules.add("." if node.level else node.module or "")
+    roots = {module.split(".")[0] for module in modules}
+    internal = {module for module in modules if module.startswith("tradinghelper")}
+    opens = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"
+    ]
+
+    assert roots <= COMMIT_MESSAGE_ALLOWED_IMPORTS, roots - COMMIT_MESSAGE_ALLOWED_IMPORTS
+    assert internal <= {"tradinghelper.schemas"}, internal
+    assert opens == []
+
+
 def test_imports_of_detects_violation(tmp_path: Path) -> None:
     """Garde-fou du détecteur : un import interdit est bien trouvé (absolu, `from`, sous-module)."""
     (tmp_path / "a.py").write_text("import pandas as pd\n", encoding="utf-8")
