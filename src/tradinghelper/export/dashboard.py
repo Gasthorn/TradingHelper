@@ -235,12 +235,12 @@ def replace_dir(out: Path, files: Mapping[str, bytes]) -> None:
 _GIT_SHA: Final = re.compile(r"^[0-9a-f]{7,40}$")
 
 
-def resolve_git_sha(environ: Mapping[str, str], repo_root: Path) -> str | None:
-    """`GITHUB_SHA` (CI) s'il est valide, sinon `git rev-parse HEAD` dans `repo_root`, sinon
-    `None` (hors dépôt git, git absent) (R11)."""
-    from_env = environ.get("GITHUB_SHA", "").strip().lower()
-    if _GIT_SHA.match(from_env):
-        return from_env
+def _env_sha(environ: Mapping[str, str], name: str) -> str | None:
+    value = environ.get(name, "").strip().lower()
+    return value if _GIT_SHA.match(value) else None
+
+
+def _repo_head(repo_root: Path) -> str | None:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -254,6 +254,18 @@ def resolve_git_sha(environ: Mapping[str, str], repo_root: Path) -> str | None:
         return None
     sha = result.stdout.strip().lower()
     return sha if _GIT_SHA.match(sha) else None
+
+
+def resolve_git_sha(environ: Mapping[str, str], repo_root: Path) -> str | None:
+    """`TH_GIT_SHA` s'il est valide, sinon `git rev-parse HEAD` dans `repo_root`, sinon
+    `GITHUB_SHA` s'il est valide, sinon `None` (F08 R11, modifié par F10 R8).
+
+    En CI, `GITHUB_SHA` désigne le commit déclencheur du run, pas forcément le commit de données
+    déployé : il ne sert qu'en dernier recours, hors dépôt git.
+    """
+    return (
+        _env_sha(environ, "TH_GIT_SHA") or _repo_head(repo_root) or _env_sha(environ, "GITHUB_SHA")
+    )
 
 
 def render_files(

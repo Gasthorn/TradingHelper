@@ -10,7 +10,7 @@
 
 ## `git_sha` du manifest (modification de F08 R11)
 
-- [ ] **T1** `resolve_git_sha` : `TH_GIT_SHA` > `git rev-parse HEAD` > `GITHUB_SHA` > `None` — R8
+- [x] **T1** `resolve_git_sha` : `TH_GIT_SHA` > `git rev-parse HEAD` > `GITHUB_SHA` > `None` — R8
   - Tests : `tests/export/test_dashboard.py::test_git_sha_th_git_sha_first` (les trois sources présentes),
     `::test_git_sha_repo_head_before_github_sha` (dépôt git temporaire + `GITHUB_SHA` différent → HEAD),
     `::test_git_sha_github_sha_fallback_outside_git` (`GIT_CEILING_DIRECTORIES`), `::test_git_sha_invalid_env_ignored`

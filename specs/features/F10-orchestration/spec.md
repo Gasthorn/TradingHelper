@@ -1,6 +1,6 @@
 # F10 — Orchestration GitHub Actions
 
-- **Statut** : 🧭 Planned (M1, 2026-11-25) — M3 : ✅ Approved, plan à compléter
+- **Statut** : 🚧 In progress (M1, 2026-11-25) — M3 : ✅ Approved, plan à compléter
 - **Milestone** : M1 (exigences et critères `[M1]` : daily sans signaux, deploy, backfill) puis M3 (`[M3]` : étapes signal/paper du daily, weekly-train)
 - **Dépend de** : F00, F01, F02, F08 (M1) ; F05, F06, F07 pour les éléments `[M3]`
 - **Contrats** : `03-data-contracts.md` §6 (lecture du rapport de run), §7 (`git_sha` du manifest)
