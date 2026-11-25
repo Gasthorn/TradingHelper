@@ -153,6 +153,25 @@
   - Fichiers : aucun (preuves dans la vérification) ; éventuellement `specs/features/F10-orchestration/spec.md` si un
     écart oblige à proposer une modification de spec.
   - Fini quand : chaque étape a un lien de run et son résultat attendu.
+  - Résultats du 2026-11-25 (réglage « Workflow permissions » passé sur « Read repository contents » avant les runs) :
+    1. ✅ [45669168355](https://github.com/Gasthorn/TradingHelper/actions/runs/45669168355) : commit `0586a75`
+       `data: daily update 2026-11-24` par `github-actions[bot]`, deploy ; `manifest.json` publié : `data_as_of`
+       2026-11-24, `git_sha` `0586a75…` ; 1 min 14 s.
+    2. ❌ [45669437545](https://github.com/Gasthorn/TradingHelper/actions/runs/45669437545) puis
+       [45669443008](https://github.com/Gasthorn/TradingHelper/actions/runs/45669443008) : exécutés l'un après
+       l'autre, mais le second, parti du SHA de son déclenchement (`0586a75`) et non de la pointe poussée par le
+       premier (`e868138`), entre en conflit sur `data/runs/2026-11-24.json` (3 tentatives, rien poussé, run rouge).
+       Correctif : checkout de `github.ref` dans les jobs `pipeline` (`test_pipeline_checks_out_branch_tip`).
+       **À refaire après fusion du correctif.**
+    3. ✅ [45669886773](https://github.com/Gasthorn/TradingHelper/actions/runs/45669886773) : branche de test, commit
+       sauté, deploy sauté, run vert.
+    4. ✅ [45670168209](https://github.com/Gasthorn/TradingHelper/actions/runs/45670168209) : `start` sans `full` →
+       « --start n'a de sens qu'avec --full », rouge, aucun commit ;
+       [45670325252](https://github.com/Gasthorn/TradingHelper/actions/runs/45670325252) : commit `2120e06`
+       `data: backfill 2026-11-24 (history rewrite: AAPL)`, deploy, manifest au SHA `2120e06…`.
+    5. ✅ [45670036615](https://github.com/Gasthorn/TradingHelper/actions/runs/45670036615) : `AAPL 2026-11-20
+       ohlc_inconsistent`, run rouge, deploy sauté, artefact `run-report-45670036615` ; branche supprimée.
+    6. ⏳ Premier daily planifié le 2026-11-25 à 22 h 30 UTC.
 
 - [ ] **T_final** Vérification : tous les critères d'acceptation M1 de la spec, et le critère ajouté à F08 (`git_sha`)
   (→ `/spec-verify F10`)
