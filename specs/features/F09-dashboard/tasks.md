@@ -169,13 +169,17 @@
     illisible ou d'une autre version, navigation après erreur ; fixture `empty` sans autre requête que le
     manifest. 26 tests e2e (dont 2 échecs attendus).
 
-- [ ] **T13** Date des données et alerte de fraîcheur — R6
+- [x] **T13** Date des données et alerte de fraîcheur — R6
   - Tests : `e2e/freshness.spec.ts` (`page.clock` figée, fixture `m1` à `data_as_of` 2026-11-23) : `::date shown on
     every route` (`23/11/2026` sur `#/`, `#/ticker/AAPL`, `#/inconnu`), `::+3 sessions fresh` (horloge au 2026-11-27,
     New York), `::+4 sessions stale` (horloge au 2026-11-30 → « Données périmées (4 séances) »), `::empty fixture`
     (aucune alerte, « Aucune donnée disponible »).
   - Fichiers : `dashboard/src/components/Header.tsx` (date et badge via `lib/dates.ts::freshness`).
   - Fini quand : e2e vert ; qualité dashboard verte.
+  - Fait (2026-11-25) : « Données au JJ/MM/AAAA » (`<time>`) et badge `role="status"` « Données périmées
+    (N séances) » ; rien tant que le manifest n'est pas chargé ou si `data_as_of` est null. Test ajouté : date du
+    jour prise à New York (03:00 UTC le samedi = vendredi soir). 7 tests e2e ; vérifié dans le navigateur sur
+    l'export local (« Données au 24/11/2026 », pas d'alerte le 25/11).
 
 - [ ] **T14** Thème et contrastes — R7, R8
   - Tests : `e2e/theme.spec.ts::toggle without reload` (couleur de fond calculée change), `::persists after reload`,

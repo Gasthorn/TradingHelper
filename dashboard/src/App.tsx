@@ -29,7 +29,7 @@ export function App() {
   const key = route.page === "ticker" ? `ticker/${route.symbol}` : route.page;
   return (
     <>
-      <Header />
+      <Header dataAsOf={manifest.status === "ok" ? manifest.data.data_as_of : undefined} />
       <main>
         {route.page === "not_found" ? (
           <NotFound />

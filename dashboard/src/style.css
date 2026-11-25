@@ -68,3 +68,23 @@ main {
 .loading {
   font-style: italic;
 }
+
+.data-date {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.stale-badge {
+  padding: 0.125rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.stale-badge::before {
+  content: "⚠ ";
+}
