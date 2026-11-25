@@ -69,13 +69,14 @@
     casse, symbole mis en majuscules ; ajout de `tickerHash` (lien Overview → fiche, aller-retour testé).
     40 tests (20 × 2 fuseaux).
 
-- [ ] **T6** [P] Marqueurs et enrichissement P8 — R17
+- [x] **T6** [P] Marqueurs et enrichissement P8 — R17
   - Tests : `src/lib/markers.test.ts` : `strategyOptions` (uniques, triées, vide → `[]`) ; `visibleMarkers` filtre par
     stratégie, exclut les dates absentes de la série sans erreur, ajoute `modelId`/`sharpeOos` depuis
     `manifest.strategies`, `known: false` et valeurs `null` pour une stratégie inconnue ; ordre conservé (date puis
     stratégie).
   - Fichiers : `dashboard/src/lib/markers.ts`, `dashboard/src/lib/markers.test.ts`.
   - Fini quand : tests verts ; qualité dashboard verte.
+  - Fait (2026-11-25) : stratégie `null` = toutes ; entrées non modifiées (test). 18 tests (9 × 2 fuseaux).
 
 - [ ] **T7** [P] Préférence de thème — R7
   - Tests : `src/lib/theme.test.ts` : `parsePreference` (`light`, `dark`, `system`, `null`, valeur inconnue → `system`) ;
