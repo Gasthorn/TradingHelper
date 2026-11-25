@@ -375,7 +375,7 @@
     - build `TH_DASHBOARD_BASE=/TradingHelper/` : `check:dist` OK, assets sous `/TradingHelper/` (sous Git Bash,
       `MSYS_NO_PATHCONV=1` est nécessaire, sinon le chemin est converti en chemin Windows).
 
-- [ ] **T_final** Vérification : tous les critères d'acceptation M1 de la spec (→ `/spec-verify F09`)
+- [x] **T_final** Vérification : tous les critères d'acceptation M1 de la spec (→ `/spec-verify F09`) — 19/19 prouvés le 2026-11-26, statut Verifying (Done après validation).
 
 ## Couverture exigences → tâches
 | Exigence | Tâches |

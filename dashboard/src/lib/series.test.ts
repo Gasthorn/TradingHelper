@@ -34,6 +34,12 @@ describe("periodWindow (R16)", () => {
     expect(periodWindow(DATES, "5A")).toEqual({ from: 0, to: DATES.length - 1 });
   });
 
+  it("5A sur 2 ans d'historique renvoie toute la série (critère R16)", () => {
+    const twoYears = weekdaysUntil("2024-11-25", "2026-11-23");
+    expect(periodWindow(twoYears, "5A")).toEqual({ from: 0, to: twoYears.length - 1 });
+    expect(twoYears.length).toBeGreaterThan(500);
+  });
+
   it("Max renvoie toute la série", () => {
     expect(periodWindow(DATES, "Max")).toEqual({ from: 0, to: DATES.length - 1 });
   });

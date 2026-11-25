@@ -1,6 +1,6 @@
 # F09 — Dashboard GitHub Pages
 
-- **Statut** : 🚧 In progress (M1, depuis le 2026-11-25)
+- **Statut** : 🔍 Verifying (M1, 2026-11-26 : 19/19 critères prouvés, en attente de validation)
 - **Milestone** : M1 (exigences et critères `[M1]` : socle, Overview, Ticker) puis M3/M4 (`[M3]` : Portfolios,
   Portfolio, Models, Health, contenus dépendant des signaux et portefeuilles)
 - **Dépend de** : F08 (M1 pour `[M1]`, M3 pour `[M3]`) ; F00 R14 (`base` Vite configurable)
@@ -161,40 +161,40 @@ Vue d'ensemble ; le contenu exigible est dans les exigences citées.
 ## Critères d'acceptation
 
 ### M1
-- [ ] Recharger `#/ticker/AAPL` affiche la fiche ; `#/inconnu` et `#/portfolios` (non livrée en M1) affichent « Page
-  introuvable » avec lien vers l'Overview. (R1)
-- [ ] Fixture `m1` : l'Overview ne fait aucune requête `tickers/*` ; toute requête de données hors manifest porte
+- [x] Recharger `#/ticker/AAPL` affiche la fiche ; `#/inconnu` et `#/portfolios` (non livrée en M1) affichent « Page
+  introuvable » avec lien vers l'Overview. (R1) — Preuve : `e2e/routing.spec.ts` (lien profond rechargé, 6 routes « Page introuvable » dont `#/portfolios`, lien `#/`), `routes.test.ts::parseHash`.
+- [x] Fixture `m1` : l'Overview ne fait aucune requête `tickers/*` ; toute requête de données hors manifest porte
   `?v=<sha256>` égal à celui du manifest ; le manifest est demandé en `no-cache` ; `lightweight-charts` n'apparaît que
-  dans un chunk chargé sur la page Ticker. (R2)
-- [ ] `overview.json` en 404, puis JSON invalide, puis `schema_version: 2` → message nommant le fichier, bandeau visible,
-  aucune exception non interceptée. (R3)
-- [ ] Fixture `empty` : l'Overview affiche « Aucune donnée disponible » ; fixture `m1` : leaderboard, signaux, KPIs et
-  fiche signal en état vide, sélecteur de stratégie masqué. (R4)
-- [ ] Le texte exact de P8 est présent sur chaque route, y compris les pages d'erreur et « Page introuvable ». (R5)
-- [ ] `data_as_of` affiché sur chaque route ; horloge à `S' = data_as_of + 3` jours ouvrés → pas d'alerte, `+ 4` → «
-  Données périmées (4 séances) » ; test unitaire du retard sur un week-end et un férié. (R6, R23)
-- [ ] La bascule clair/sombre/système change les couleurs de la page et du graphique sans rechargement et survit à un
-  rechargement ; « système » suit `prefers-color-scheme` émulé. (R7)
-- [ ] `@axe-core/playwright` : aucune violation de contraste dans les deux thèmes ; bougies haussières creuses,
-  marqueurs ▲ « BUY » / ▼ « SELL » ; navigation au clavier jusqu'au sélecteur de période. (R8)
-- [ ] À 375 × 812, `scrollWidth <= 375` sur chaque route livrée. (R9)
-- [ ] Build avec `TH_DASHBOARD_BASE=/TradingHelper/` servi sous ce chemin : Overview et Ticker chargent leurs données
-  (aucune requête hors `/TradingHelper/`). (R10)
-- [ ] Tests unitaires des formats : `232,40 $`, `0,1234 $`, `+0,63 %`, `23/11/2026`, `null` → `—` ; une date de séance
-  reste la même dans les fuseaux `America/Los_Angeles` et `Pacific/Auckland`. (R11, R23)
-- [ ] Fixture `m1` : une ligne par symbole avec sparkline SVG, benchmark signalé, clic → fiche ticker. (R12)
-- [ ] `#/ticker/brk.b` résolu vers `BRK.B` (casse ignorée) ; `BRK%2DB` décodé en `BRK-B` (test unitaire) ; `#/ticker/ZZZ` → « Pas de données pour ZZZ ». (R14)
-- [ ] Ticker de moins de 200 barres : SMA200 désactivée « historique insuffisant » ; aucune valeur de warm-up tracée à 0 ;
-  SMA20 et SMA50 actives par défaut. (R15)
-- [ ] Période 1M sur une fixture se terminant le 2026-11-23 → première barre ≥ 2026-10-23 ; 5A sur 2 ans d'historique →
-  série complète ; défaut 6M. (R16, R23)
-- [ ] Fixture `m1-signals` : sur AAPL, exactement deux marqueurs, BUY le 20/11/2026 et SELL le 23/11/2026, avec leur
+  dans un chunk chargé sur la page Ticker. (R2) — Preuve : `e2e/loading.spec.ts` (Overview sans `tickers/*`, `?v=` égal à l'empreinte du manifest, `fetch` du manifest en `no-cache` observé, un seul chargement par fichier, chunk `priceChart-*.js` demandé sur la seule page Ticker), `urls.test.ts`, `loader.test.ts` ; efficacité vérifiée par mutation (T22).
+- [x] `overview.json` en 404, puis JSON invalide, puis `schema_version: 2` → message nommant le fichier, bandeau visible,
+  aucune exception non interceptée. (R3) — Preuve : `e2e/errors.spec.ts` (manifest et `overview.json` absent, JSON invalide, `schema_version` 2 : message nommant `data/<fichier>`, bandeau et navigation conservés, aucune `pageerror`), `loader.test.ts` (erreurs typées).
+- [x] Fixture `empty` : l'Overview affiche « Aucune donnée disponible » ; fixture `m1` : leaderboard, signaux, KPIs et
+  fiche signal en état vide, sélecteur de stratégie masqué. (R4) — Preuve : `e2e/empty.spec.ts` (fixture `empty` : « Aucune donnée disponible » sans autre requête que le manifest ; `m1` : indicateurs, classement, derniers signaux vides), `e2e/ticker.spec.ts` (sélecteur de stratégie masqué, « Signal du jour » vide).
+- [x] Le texte exact de P8 est présent sur chaque route, y compris les pages d'erreur et « Page introuvable ». (R5) — Preuve : `e2e/disclaimer.spec.ts` (texte exact sur `#/`, `#/ticker/AAPL`, `#/inconnu`), `e2e/errors.spec.ts` (bandeau sur les pages d'erreur), `npm run check:dist`.
+- [x] `data_as_of` affiché sur chaque route ; horloge à `S' = data_as_of + 3` jours ouvrés → pas d'alerte, `+ 4` → «
+  Données périmées (4 séances) » ; test unitaire du retard sur un week-end et un férié. (R6, R23) — Preuve : `e2e/freshness.spec.ts` (date sur 3 routes, +3 → pas d'alerte, +4 → « Données périmées (4 séances) », date du jour prise à New York, fixture `empty`), `dates.test.ts::sessionsBehind` (week-end, Thanksgiving compté) et `::freshness`.
+- [x] La bascule clair/sombre/système change les couleurs de la page et du graphique sans rechargement et survit à un
+  rechargement ; « système » suit `prefers-color-scheme` émulé. (R7) — Preuve : `e2e/theme.spec.ts` (bascule système → clair → sombre sans rechargement, persistance, « système » suit `prefers-color-scheme` en direct, pas de flash, graphique recoloré sans recréation), `theme.test.ts`.
+- [x] `@axe-core/playwright` : aucune violation de contraste dans les deux thèmes ; bougies haussières creuses,
+  marqueurs ▲ « BUY » / ▼ « SELL » ; navigation au clavier jusqu'au sélecteur de période. (R8) — Preuve : `e2e/a11y.spec.ts` (axe `color-contrast` sans violation sur `#/`, `#/inconnu`, `#/ticker/AAPL` en clair et sombre ; focus visible ; période atteinte par Tab et changée aux flèches ; indicateur coché à l'Espace), `e2e/ticker.spec.ts` (`data-up-style="hollow"`, légende ▲ BUY / ▼ SELL), `e2e/overview.spec.ts` (variation signée fléchée).
+- [x] À 375 × 812, `scrollWidth <= 375` sur chaque route livrée. (R9) — Preuve : `e2e/mobile.spec.ts`, projet `mobile` 375 × 812 (aucun débordement sur `#/`, `#/ticker/AAPL`, `#/ticker/BRK.B`, `#/inconnu`, `#/ticker/ZZZ`, page d'erreur ; cibles ≥ 44 × 44 px) ; réel : T26.
+- [x] Build avec `TH_DASHBOARD_BASE=/TradingHelper/` servi sous ce chemin : Overview et Ticker chargent leurs données
+  (aucune requête hors `/TradingHelper/`). (R10) — Preuve : `e2e/base.spec.ts`, projet `base` (page servie sous `/TradingHelper/`, Overview et fiche chargent sous la base, aucune requête de même origine hors base ; efficacité vérifiée par mutation, T21), `check:dist` avec `TH_DASHBOARD_BASE=/TradingHelper/`.
+- [x] Tests unitaires des formats : `232,40 $`, `0,1234 $`, `+0,63 %`, `23/11/2026`, `null` → `—` ; une date de séance
+  reste la même dans les fuseaux `America/Los_Angeles` et `Pacific/Auckland`. (R11, R23) — Preuve : `format.test.ts` (`232,40 $`, `0,1234 $`, `1 234,56 $`, `+0,63 %`, `67 %`, `23/11/2026`, `—`), `dates.test.ts` ; toute la suite Vitest tourne sous `America/Los_Angeles` et `Pacific/Auckland` (fuseau vérifié par `urls.test.ts`).
+- [x] Fixture `m1` : une ligne par symbole avec sparkline SVG, benchmark signalé, clic → fiche ticker. (R12) — Preuve : `e2e/overview.spec.ts` (4 lignes dans l'ordre du manifest avec sparkline SVG et `aria-label`, SPY « indice de référence », clic → `#/ticker/BRK.B`) ; réel : 21 lignes (T26).
+- [x] `#/ticker/brk.b` résolu vers `BRK.B` (casse ignorée) ; `BRK%2DB` décodé en `BRK-B` (test unitaire) ; `#/ticker/ZZZ` → « Pas de données pour ZZZ ». (R14) — Preuve : `e2e/ticker.spec.ts::#/ticker/brk.b résout BRK.B`, `::symbole inconnu`, `routes.test.ts` (`BRK%2DB` → `BRK-B`, encodage invalide → introuvable).
+- [x] Ticker de moins de 200 barres : SMA200 désactivée « historique insuffisant » ; aucune valeur de warm-up tracée à 0 ;
+  SMA20 et SMA50 actives par défaut. (R15) — Preuve : `e2e/ticker.spec.ts` (BRK.B : case SMA200 désactivée « historique insuffisant » ; `data-overlays="sma20,sma50"` par défaut), `series.test.ts::linePoints` (valeurs `null` exclues, ni zéro ni interpolation).
+- [x] Période 1M sur une fixture se terminant le 2026-11-23 → première barre ≥ 2026-10-23 ; 5A sur 2 ans d'historique →
+  série complète ; défaut 6M. (R16, R23) — Preuve : `e2e/ticker.spec.ts` (6M par défaut, 1M → première barre ≥ 2026-10-23, Max → toute la série), `dates.test.ts::periodStart`, `series.test.ts::periodWindow` (dont « 5A sur 2 ans d'historique renvoie toute la série »).
+- [x] Fixture `m1-signals` : sur AAPL, exactement deux marqueurs, BUY le 20/11/2026 et SELL le 23/11/2026, avec leur
   confiance ; aucun marqueur le 19/11 (HOLD) ; un marqueur à une date absente de la série n'est pas tracé et ne produit
-  aucune erreur. (R17)
-- [ ] `npm test` passe ; `pytest` valide chaque fichier de chaque fixture contre `schemas/`. (R23, R24)
-- [ ] `npm run test:e2e` passe sur les fixtures `empty`, `m1` et `m1-signals`, sans erreur console ; le job `dashboard` de
-  la CI exécute les deux suites. (R25)
-- [ ] `npm run lighthouse` : performance ≥ 90 (médiane de 3) sur l'Overview mobile, moins de 5 Mo transférés. (R26)
+  aucune erreur. (R17) — Preuve : `e2e/ticker.spec.ts` (fixture `m1-signals` : `data-markers="2"`, BUY 20/11/2026 à 67 %, SELL 23/11/2026 à 38 %, rien le 19/11 ; filtre de stratégie 3 → 2 → 1 ; marqueur daté d'un samedi ignoré sans erreur ; détail P8 modèle et Sharpe), `markers.test.ts`.
+- [x] `npm test` passe ; `pytest` valide chaque fichier de chaque fixture contre `schemas/`. (R23, R24) — Preuve : `npm test` 274 tests verts (16 fichiers × 2 fuseaux) ; `test_dashboard_fixtures.py::test_fixtures_match_json_schemas[empty|m1|m1-signals]`, `::test_fixtures_up_to_date[…]`, `tests/dashboard_fixtures.py --check` → 0.
+- [x] `npm run test:e2e` passe sur les fixtures `empty`, `m1` et `m1-signals`, sans erreur console ; le job `dashboard` de
+  la CI exécute les deux suites. (R25) — Preuve : `npm run test:e2e` 93 tests verts (dont 2 échecs attendus de l'outillage), projets `desktop`, `mobile`, `base` ; `test_repo_hygiene.py::test_ci_dashboard_job_runs_dashboard_tests` ; CI de la PR #10 verte au commit `36a97dd` (`dashboard` 1 min 2 s).
+- [x] `npm run lighthouse` : performance ≥ 90 (médiane de 3) sur l'Overview mobile, moins de 5 Mo transférés. (R26) — Preuve : `npm run lighthouse` → scores 100 / 100 / 100 (médiane 100), LCP 0,75 s, 17,3 Ko transférés (T24, relancé à la vérification).
 
 ### M3
 - [ ] Fixture `m3` : KPIs renseignés, leaderboard contenant toutes les baselines présentes, signaux filtrables par
