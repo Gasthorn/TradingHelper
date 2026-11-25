@@ -86,13 +86,17 @@
   - Fait (2026-11-25) : ajout de `THEME_PREFERENCES` et `nextPreference` (ordre de la bascule système → clair →
     sombre). 32 tests (16 × 2 fuseaux).
 
-- [ ] **T8** Chargeur de données — R2, R3
+- [x] **T8** Chargeur de données — R2, R3
   - Tests : `src/data/loader.test.ts` (fetch injecté) : manifest demandé avec `cache: "no-cache"` ; fichier demandé à
     l'URL `?v=` du manifest ; deuxième `loadFile` du même chemin sans nouvel appel ; `DataError` `missing` (HTTP 404,
     chemin absent de `manifest.files`), `invalid_json`, `schema_version` (valeur 2) avec `path` renseigné.
   - Fichiers : `dashboard/src/data/loader.ts`, `dashboard/src/data/loader.test.ts`, `dashboard/vite.config.ts`
     (inclure `src/data/**/*.test.ts`).
   - Fini quand : tests verts ; qualité dashboard verte.
+  - Fait (2026-11-25) : fabrique `createDataLoader(base, fetchFn)` (cache isolé par test) + instance `dataLoader`
+    de l'application, au lieu de fonctions libres ; échec réseau classé `missing` ; une erreur n'est pas mise en
+    cache (réessai possible). `vite.config.ts` inchangé (`src/**/*.test.ts` couvre déjà `src/data/`).
+    34 tests (17 × 2 fuseaux).
 
 ## Fixtures d'export
 
