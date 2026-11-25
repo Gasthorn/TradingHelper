@@ -20,6 +20,7 @@ from tradinghelper.data.storage import (
     dumps_prices,
     prices_path,
     read_prices,
+    read_run_reports,
     run_report_path,
     update_run_report,
     write_prices_if_changed,
@@ -632,3 +633,60 @@ def test_read_json_keeps_nan_literal(tmp_path: Path) -> None:
     assert isinstance(bars, list)
     assert isinstance(bars[0], list)
     assert bars[0][0] != bars[0][0]  # NaN
+
+
+# --- Lecture de tous les rapports (F10 R5) -------------------------------------------------------
+
+
+def test_read_run_reports_all_valid(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    update_run_report(runs / "2026-11-23.json", SESSION, _run(symbol="MSFT"))
+    update_run_report(runs / "2026-11-20.json", date(2026, 11, 20), _run())
+
+    reports = read_run_reports(runs)
+
+    assert [report.session_date for report in reports] == [date(2026, 11, 20), SESSION]
+    assert reports[1].ingest is not None
+    assert reports[1].ingest[0].tickers[0].symbol == "MSFT"
+
+
+def test_read_run_reports_missing_dir_is_empty(tmp_path: Path) -> None:
+    assert read_run_reports(tmp_path / "runs") == []
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"{ pas du json", b'{"schema_version": 1}'],
+    ids=["json-invalide", "hors-contrat"],
+)
+def test_read_run_reports_invalid_raises(tmp_path: Path, content: bytes) -> None:
+    runs = tmp_path / "runs"
+    update_run_report(runs / "2026-11-20.json", date(2026, 11, 20), _run())
+    bad = runs / "2026-11-23.json"
+    bad.write_bytes(content)
+
+    with pytest.raises(RunReportError) as excinfo:
+        read_run_reports(runs)
+
+    assert excinfo.value.path == bad
+    assert "2026-11-23.json" in str(excinfo.value)
+
+
+def test_read_run_reports_rejects_session_mismatch(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    update_run_report(runs / "2026-11-23.json", SESSION, _run())
+    (runs / "2026-11-23.json").rename(runs / "2026-11-24.json")
+
+    with pytest.raises(RunReportError, match="2026-11-23"):
+        read_run_reports(runs)
+
+
+def test_read_run_reports_ignores_non_dated_files(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    update_run_report(runs / "2026-11-23.json", SESSION, _run())
+    (runs / "notes.txt").write_text("x", encoding="utf-8")
+    (runs / ".2026-11-24.json.abc123.tmp").write_text("{", encoding="utf-8")
+    (runs / "2026-13-45.json").write_text("{", encoding="utf-8")
+    (runs / "latest.json").write_text("{", encoding="utf-8")
+
+    assert [report.session_date for report in read_run_reports(runs)] == [SESSION]

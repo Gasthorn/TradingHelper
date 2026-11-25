@@ -20,7 +20,7 @@
 
 ## Message de commit (`th commit-message`)
 
-- [ ] **T2** `storage.read_run_reports` — R5
+- [x] **T2** `storage.read_run_reports` — R5
   - Tests : `tests/data/test_storage.py::test_read_run_reports_all_valid` (deux rapports, ordre des noms),
     `::test_read_run_reports_missing_dir_is_empty`, `::test_read_run_reports_invalid_raises` (JSON invalide, puis
     rapport hors contrat → `RunReportError` citant le fichier), `::test_read_run_reports_ignores_non_dated_files`

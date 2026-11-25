@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import tempfile
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
@@ -24,6 +25,8 @@ from tradinghelper.schemas import PRICE_COLUMNS, Bar, IngestRun, PricesFile, Run
 ENCODING = "utf-8"
 
 DATA_DIR_ENV = "TH_DATA_DIR"
+
+_DATED_FILE: Final = re.compile(r"^(\d{4}-\d{2}-\d{2})\.json$")
 
 
 # --- Emplacements ------------------------------------------------------------------------------
@@ -268,3 +271,45 @@ def append_run_report_entry(
     # Validation du résultat avant écriture : on n'écrit jamais un rapport hors contrat.
     RunReport.model_validate(current)
     atomic_write_json(path, current)
+
+
+def dated_files(directory: Path) -> list[tuple[date, Path]]:
+    """Fichiers `YYYY-MM-DD.json` (date valide) de `directory`, par date croissante ; les autres
+    noms (dont `latest.json`, temporaires, sauvegardes) sont ignorés. Dossier absent : []."""
+    if not directory.is_dir():
+        return []
+    found: list[tuple[date, Path]] = []
+    for path in directory.iterdir():
+        match = _DATED_FILE.match(path.name)
+        if match is None or not path.is_file():
+            continue
+        try:
+            day = date.fromisoformat(match.group(1))
+        except ValueError:
+            continue
+        found.append((day, path))
+    return sorted(found)
+
+
+def read_run_reports(runs_dir: Path) -> list[RunReport]:
+    """Tous les rapports `YYYY-MM-DD.json` de `runs_dir`, validés, par séance croissante
+    (F10 R5). Dossier absent : []. Le premier rapport illisible, hors contrat ou dont la séance
+    ne correspond pas au nom du fichier lève `RunReportError`."""
+    reports: list[RunReport] = []
+    for day, path in dated_files(runs_dir):
+        try:
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise RunReportError(path, f"fichier illisible ({exc.strerror})") from exc
+        try:
+            report = RunReport.model_validate_json(raw)
+        except ValidationError as exc:
+            raise RunReportError(path, f"rapport invalide : {exc.errors()[0]['msg']}") from exc
+        if report.session_date != day:
+            raise RunReportError(
+                path,
+                f"séance {report.session_date.isoformat()} dans le fichier, "
+                f"{day.isoformat()} attendue",
+            )
+        reports.append(report)
+    return reports
