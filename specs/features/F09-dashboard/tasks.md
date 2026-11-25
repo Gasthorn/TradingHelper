@@ -78,11 +78,13 @@
   - Fini quand : tests verts ; qualité dashboard verte.
   - Fait (2026-11-25) : stratégie `null` = toutes ; entrées non modifiées (test). 18 tests (9 × 2 fuseaux).
 
-- [ ] **T7** [P] Préférence de thème — R7
+- [x] **T7** [P] Préférence de thème — R7
   - Tests : `src/lib/theme.test.ts` : `parsePreference` (`light`, `dark`, `system`, `null`, valeur inconnue → `system`) ;
     `resolveTheme` (4 combinaisons + `system`) ; `THEME_KEY` stable.
   - Fichiers : `dashboard/src/lib/theme.ts`, `dashboard/src/lib/theme.test.ts`.
   - Fini quand : tests verts ; qualité dashboard verte.
+  - Fait (2026-11-25) : ajout de `THEME_PREFERENCES` et `nextPreference` (ordre de la bascule système → clair →
+    sombre). 32 tests (16 × 2 fuseaux).
 
 - [ ] **T8** Chargeur de données — R2, R3
   - Tests : `src/data/loader.test.ts` (fetch injecté) : manifest demandé avec `cache: "no-cache"` ; fichier demandé à
