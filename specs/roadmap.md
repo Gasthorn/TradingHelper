@@ -29,7 +29,7 @@ Pages Portfolios/Health complètes, e2e, Lighthouse, documentation.
 | F02 | Qualité des données | M1 | F01 | ✔️ Done |
 | F08 | Export dashboard (partiel, crée `features/indicators.py`) | M1 | F01, F02 | ✔️ Done |
 | F09 | Dashboard (Overview, Ticker) | M1 | F08 | 📝 Draft |
-| F10 | Orchestration (daily, deploy, ci) | M1 | F01, F02, F08 | 📝 Draft |
+| F10 | Orchestration (daily, deploy, backfill) | M1 | F01, F02, F08 | ✅ Approved |
 | F03 | Features & labels | M2 | F01 | 📝 Draft |
 | F04 | Moteur de backtest & métriques | M2 | F01 | 📝 Draft |
 | F05 | Baselines | M2 | F04 | 📝 Draft |
@@ -37,7 +37,7 @@ Pages Portfolios/Health complètes, e2e, Lighthouse, documentation.
 | F07 | Signaux & paper trading | M3 | F04–F06 | 📝 Draft |
 | F08 | Export dashboard (complet) | M3 | F04–F07 (pré-requis de contrat : voir spec F08) | ✅ Approved |
 | F09 | Dashboard (Portfolios, Models, Health) | M3/M4 | F08 | 📝 Draft |
-| F10 | Orchestration (weekly-train, backfill) | M3 | F06 | 📝 Draft |
+| F10 | Orchestration (signal/paper du daily, weekly-train) | M3 | F05–F07 | ✅ Approved |
 
 Ordre conseillé : F00 → F01 → F02 → F08(partiel) → F10(daily+deploy) → F09(M1) → F04 → F03 → F05 → F06 → F07 → reste.
 Démarrer le cron quotidien **dès M1** : chaque jour d'historique live accumulé tôt rend le paper trading plus parlant ensuite.

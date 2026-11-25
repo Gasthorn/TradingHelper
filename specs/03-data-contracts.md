@@ -208,7 +208,7 @@ sont indentés pour la lecture.
 }
 ```
 `data_as_of` = plus petite dernière date des symboles exportés (univers + benchmark ayant un fichier), `null` sinon.
-`git_sha` = `GITHUB_SHA`, sinon `git rev-parse HEAD`, sinon `null`. `files` : tous les fichiers produits sauf le manifest,
+`git_sha` = `TH_GIT_SHA`, sinon `git rev-parse HEAD`, sinon `GITHUB_SHA`, sinon `null` (F08 R11, F10 R8). `files` : tous les fichiers produits sauf le manifest,
 triés par `path` ; `sha256` = 16 premiers caractères hexadécimaux. M3 : `strategies` =
 `[{ "id": "lgbm_dir5_v3", "kind": "model", "model_id": "lgbm_dir5_20261122_ab12cd", "sharpe_oos": 1.1 }]`
 (`kind ∈ {baseline, model}`, `model_id` à `null` pour une baseline).

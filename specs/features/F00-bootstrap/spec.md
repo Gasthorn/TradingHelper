@@ -82,7 +82,7 @@ avec des outils de qualité et une configuration validée dès le premier commit
 
 ## Hors périmètre
 - Ingestion (F01), commande `th schemas` et vérification de `schemas/` en CI (F01 R17).
-- Workflows `daily`, `deploy-pages`, `weekly-train`, `backfill`, test e2e smoke du dashboard (F10).
+- Workflows `daily`, `deploy-pages`, `weekly-train`, `backfill` (F10) ; test e2e smoke du dashboard (F09 R8).
 - Seuil de couverture ≥ 90 % sur `backtest/` et `strategies/` (P9) : installé avec F04/F05, quand ces paquets ont du code.
 - Schéma complet de `backtest.yaml` et `strategies.yaml` : F00 pose des modèles minimaux, étendus par F04, F05 et F06.
 - Génération des types TS depuis `schemas/` (F08).
