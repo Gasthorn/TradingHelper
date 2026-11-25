@@ -25,12 +25,15 @@
     vérifié par `urls.test.ts` ; `tsconfig.json` inchangé (imports explicites depuis `vitest`, pas de globales).
     12 tests (6 × 2 fuseaux).
 
-- [ ] **T2** [P] Formats `fr-FR` — R11, R8
+- [x] **T2** [P] Formats `fr-FR` — R11, R8
   - Tests : `src/lib/format.test.ts` : `232,40 $`, `0,1234 $` (prix < 1), `1 234,56 $` (séparateur de milliers
     normalisé en espace insécable, vérifié explicitement), `+0,63 %`, `−1,20 %`, `67 %`, `23/11/2026`, `null` → `—`
     pour chaque fonction ; flèche ▲/▼ et signe d'une variation (`changeParts`).
   - Fichiers : `dashboard/src/lib/format.ts`, `dashboard/src/lib/format.test.ts`.
   - Fini quand : tests verts sous les deux fuseaux ; qualité dashboard verte.
+  - Fait (2026-11-25) : séparateurs fixés dans le code, pas par `Intl` (sortie variable selon ICU, « $US » pour le
+    dollar) : milliers U+202F, avant `$`/`%` U+00A0, moins U+2212 ; aucun signe pour une valeur arrondie à zéro ;
+    valeur non finie → « — ». 44 tests (22 × 2 fuseaux).
 
 - [ ] **T3** Dates civiles et fraîcheur — R6, R11
   - Tests : `src/lib/dates.test.ts` : `dayNumber`/`fromDayNumber` aller-retour (y compris 29 février) ;
