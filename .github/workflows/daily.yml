@@ -65,3 +65,45 @@ jobs:
           path: data/runs/
           if-no-files-found: ignore
           retention-days: 30
+
+  # R9 : déploiement SSI un commit a été poussé, ou lancement manuel sur main. Le job appelant
+  # accorde lui-même les permissions du workflow réutilisable (R1).
+  deploy:
+    needs: pipeline
+    if: needs.pipeline.outputs.pushed_sha != '' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-pages.yml
+    with:
+      ref: ${{ needs.pipeline.outputs.pushed_sha || needs.pipeline.outputs.head_sha }}
+
+  # R7 : seul endroit où se décide l'issue du run. Une ingestion entièrement en échec (code 1)
+  # est commitée et publiée, puis le run finit en échec.
+  conclude:
+    needs: [pipeline, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    env:
+      PIPELINE_RESULT: ${{ needs.pipeline.result }}
+      DEPLOY_RESULT: ${{ needs.deploy.result }}
+      INGEST_EXIT_CODE: ${{ needs.pipeline.outputs.ingest_exit_code }}
+    steps:
+      - name: Issue du run
+        run: |
+          if [ "$PIPELINE_RESULT" != "success" ]; then
+            echo "::error::Job pipeline : $PIPELINE_RESULT (voir l'artefact run-report)."
+            exit 1
+          fi
+          if [ "$DEPLOY_RESULT" != "success" ] && [ "$DEPLOY_RESULT" != "skipped" ]; then
+            echo "::error::Déploiement : $DEPLOY_RESULT."
+            exit 1
+          fi
+          if [ "$INGEST_EXIT_CODE" = "1" ]; then
+            echo "::error::th ingest : tous les tickers tentés ont échoué (rapport commité et publié)."
+            exit 1
+          fi
+          echo "Run réussi."

@@ -97,7 +97,7 @@
   - Fichiers : `.github/workflows/daily.yml`, `tests/test_workflows.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T9** `daily.yml` : jobs `deploy` et `conclude` — R1, R7, R9
+- [x] **T9** `daily.yml` : jobs `deploy` et `conclude` — R1, R7, R9
   - Tests : `test_workflows.py::test_caller_job_grants_pages_permissions[daily]`, `::test_deploy_condition[daily]`
     (`pushed_sha` non vide, ou `workflow_dispatch` sur `refs/heads/main`), `::test_deploy_ref_is_pushed_or_head_sha`,
     `::test_conclude_runs_always`, `::test_conclude_fails_on_ingest_exit_1`,

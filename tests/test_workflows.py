@@ -157,7 +157,7 @@ def test_actions_pinned_by_sha(name: str) -> None:
 
 @pytest.mark.parametrize(
     ("name", "expected"),
-    [("deploy-pages", {"build": 15, "deploy": 15}), ("daily", {"pipeline": 30})],
+    [("deploy-pages", {"build": 15, "deploy": 15}), ("daily", {"pipeline": 30, "conclude": 5})],
 )
 def test_job_timeouts(name: str, expected: dict[str, int]) -> None:
     """R12 : chaque job (hors appel de workflow réutilisable) a son `timeout-minutes`."""
@@ -303,3 +303,90 @@ def test_report_artifact_always_uploaded(name: str) -> None:
     assert step["with"]["path"] == "data/runs/"
     assert step["with"]["if-no-files-found"] == "ignore"
     assert step["with"]["retention-days"] == 30
+
+
+# --- daily.yml : jobs `deploy` et `conclude` (R1, R7, R9) ---------------------------------------
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+def test_caller_job_grants_pages_permissions(name: str) -> None:
+    """R1 : le job appelant accorde lui-même les permissions du workflow réutilisable."""
+    deploy = _jobs(name)["deploy"]
+
+    assert deploy["uses"] == "./.github/workflows/deploy-pages.yml"
+    assert deploy["permissions"] == PAGES_PERMISSIONS
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+def test_deploy_condition(name: str) -> None:
+    """R9 : déploiement SSI commit poussé, ou lancement manuel sur main."""
+    deploy = _jobs(name)["deploy"]
+
+    assert deploy["needs"] == "pipeline"
+    assert deploy["if"] == (
+        "needs.pipeline.outputs.pushed_sha != '' || "
+        "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')"
+    )
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+def test_deploy_ref_is_pushed_or_head_sha(name: str) -> None:
+    assert _jobs(name)["deploy"]["with"] == {
+        "ref": "${{ needs.pipeline.outputs.pushed_sha || needs.pipeline.outputs.head_sha }}"
+    }
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+def test_conclude_runs_always(name: str) -> None:
+    conclude = _jobs(name)["conclude"]
+
+    assert conclude["needs"] == ["pipeline", "deploy"]
+    assert conclude["if"] == "always()"
+    assert conclude["permissions"] == {}
+    assert conclude["env"] == {
+        "PIPELINE_RESULT": "${{ needs.pipeline.result }}",
+        "DEPLOY_RESULT": "${{ needs.deploy.result }}",
+        "INGEST_EXIT_CODE": "${{ needs.pipeline.outputs.ingest_exit_code }}",
+    }
+
+
+def _run_conclude(name: str, pipeline: str, deploy: str, ingest: str) -> int:
+    """Exécute le script du job `conclude` comme GitHub Actions ; renvoie son code."""
+    bash = find_bash()
+    if bash is None:
+        pytest.skip("bash introuvable")
+    (step,) = _steps(name, "conclude")
+    result = subprocess.run(
+        [bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", step["run"]],
+        env={
+            "PATH": "/usr/bin:/bin",
+            "PIPELINE_RESULT": pipeline,
+            "DEPLOY_RESULT": deploy,
+            "INGEST_EXIT_CODE": ingest,
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+@pytest.mark.parametrize(
+    ("pipeline", "deploy", "ingest", "ok"),
+    [
+        ("success", "success", "0", True),
+        ("success", "skipped", "0", True),  # jour férié : rien à commiter, pas de deploy
+        ("success", "success", "1", False),  # R7 : ingestion en échec, publiée puis rouge
+        ("success", "skipped", "1", False),
+        ("failure", "skipped", "0", False),  # ex. th validate en code 1
+        ("failure", "skipped", "", False),  # ex. th ingest en code 2
+        ("cancelled", "skipped", "", False),
+        ("success", "failure", "0", False),
+        ("success", "cancelled", "0", False),
+    ],
+)
+def test_conclude_outcome(name: str, pipeline: str, deploy: str, ingest: str, ok: bool) -> None:
+    code = _run_conclude(name, pipeline, deploy, ingest)
+
+    assert (code == 0) is ok
