@@ -5,7 +5,9 @@ export function NotFound() {
       <h1>Page introuvable</h1>
       <p>Cette page n'existe pas ou n'est pas encore disponible.</p>
       <p>
-        <a href="#/">Retour à l'accueil</a>
+        <a class="action-link" href="#/">
+          Retour à l'accueil
+        </a>
       </p>
     </section>
   );

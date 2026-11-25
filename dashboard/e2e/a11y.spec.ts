@@ -33,3 +33,31 @@ test("le focus clavier est visible sur la bascule de thème", async ({ page }) =
   expect(outline.style).not.toBe("none");
   expect(outline.width).toBeGreaterThanOrEqual(2);
 });
+
+test("le sélecteur de période est atteignable et utilisable au clavier", async ({ page }) => {
+  await useFixture(page, "m1");
+  await gotoRoute(page, "#/ticker/AAPL");
+  const sixMonths = page.getByRole("radio", { name: "6M" });
+  await expect(sixMonths).toBeChecked();
+
+  for (let i = 0; i < 20 && !(await sixMonths.evaluate((el) => el === document.activeElement)); i++) {
+    await page.keyboard.press("Tab");
+  }
+  await expect(sixMonths).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByRole("radio", { name: "1M" })).toBeChecked();
+  await expect(page.getByTestId("price-chart")).toHaveAttribute("data-first-date", /^2026-10-2/);
+});
+
+test("les cases d'indicateurs se cochent au clavier", async ({ page }) => {
+  await useFixture(page, "m1");
+  await gotoRoute(page, "#/ticker/AAPL");
+  const bollinger = page.getByRole("checkbox", { name: "Bollinger", exact: true });
+
+  for (let i = 0; i < 30 && !(await bollinger.evaluate((el) => el === document.activeElement)); i++) {
+    await page.keyboard.press("Tab");
+  }
+  await expect(bollinger).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(page.getByTestId("price-chart")).toHaveAttribute("data-overlays", /bollinger/);
+});

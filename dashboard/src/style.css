@@ -94,6 +94,10 @@ main {
 }
 
 .site-title {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
   font-weight: 700;
   font-size: 1.125rem;
   color: inherit;
@@ -238,6 +242,7 @@ main {
   align-items: center;
   gap: 0.25rem;
   min-height: 44px;
+  min-width: 44px;
   cursor: pointer;
 }
 
@@ -272,4 +277,11 @@ main {
 
 .marker-legend li[data-action="SELL"] .marker-legend__action {
   color: var(--down);
+}
+
+/* Lien autonome (hors texte courant) : cible tactile de 44 px (R9). */
+.action-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }

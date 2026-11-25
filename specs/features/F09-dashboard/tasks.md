@@ -278,13 +278,17 @@
 
 ## Exigences transverses
 
-- [ ] **T20** Mobile 375 px et clavier — R9, R8
+- [x] **T20** Mobile 375 px et clavier — R9, R8
   - Tests : `e2e/mobile.spec.ts` (projet `mobile`) : `::no horizontal scroll` (`scrollWidth <= 375` sur `#/`,
     `#/ticker/AAPL`, `#/ticker/BRK.B`, `#/inconnu`, page d'erreur), `::touch targets 44px` (boutons, liens de
     navigation, sélecteurs) ; `e2e/a11y.spec.ts::keyboard reaches period selector` (tabulation depuis le début de page
     jusqu'au sélecteur de période, puis activation de 1M au clavier).
   - Fichiers : `dashboard/src/style.css`, ajustements ciblés dans `pages/` et `components/` si un test échoue.
   - Fini quand : e2e vert sur les projets `desktop` et `mobile` ; qualité dashboard verte.
+  - Fait (2026-11-25) : aucun débordement à corriger (déjà vert grâce à T14–T17) ; cibles agrandies à 44 × 44 px :
+    lien du titre, libellés de période et d'indicateurs (`min-width`), lien « Retour à l'accueil » (`.action-link`).
+    Tests ajoutés : tableau des cours contenu dans la largeur, page `#/ticker/ZZZ`, cases d'indicateurs au clavier
+    (Espace), période changée par les flèches. 86 tests e2e ; vérifié dans le navigateur à 375 × 812.
 
 - [ ] **T21** [P] Déploiement sous `/TradingHelper/` — R10
   - Tests : `e2e/base.spec.ts` (serveur 4174) : `::overview loads under base`, `::ticker loads under base`,
