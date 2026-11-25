@@ -340,6 +340,19 @@
       "files_checked": 21,
       "violations": [],
       "warnings": []
+    },
+    {
+      "started_at": "2026-11-25T18:08:50.231047Z",
+      "finished_at": "2026-11-25T18:08:50.738258Z",
+      "duration_s": 0.507211,
+      "args": {
+        "symbols": null,
+        "all_history": false
+      },
+      "exit_code": 0,
+      "files_checked": 21,
+      "violations": [],
+      "warnings": []
     }
   ]
 }
