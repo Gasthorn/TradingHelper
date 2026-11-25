@@ -135,3 +135,48 @@ main {
   font: inherit;
   cursor: pointer;
 }
+
+.scroll-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.data-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.data-table .num {
+  text-align: right;
+}
+
+.change[data-direction="up"] {
+  color: var(--up);
+}
+
+.change[data-direction="down"] {
+  color: var(--down);
+}
+
+.sparkline {
+  display: block;
+  color: var(--link);
+}
+
+.tag {
+  margin-left: 0.5rem;
+  padding: 0 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}

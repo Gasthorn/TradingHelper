@@ -199,7 +199,7 @@
 
 ## Overview
 
-- [ ] **T15** Page Overview — R12, R4, R13 (état vide M1), R2, R8
+- [x] **T15** Page Overview — R12, R4, R13 (état vide M1), R2, R8
   - Tests : `e2e/overview.spec.ts::one row per symbol with sparkline` (4 lignes dans l'ordre du manifest, un `<svg>` par
     ligne, cours et variation formatés), `::benchmark flagged` (SPY « indice de référence »), `::row links to ticker`,
     `::change has sign and arrow` ; `e2e/empty.spec.ts::m1 sections empty` (KPIs, leaderboard et derniers signaux en
@@ -207,6 +207,11 @@
   - Fichiers : `dashboard/src/pages/Overview.tsx`, `dashboard/src/components/Sparkline.tsx`,
     `dashboard/src/components/Change.tsx`, `dashboard/src/components/ScrollTable.tsx`, `dashboard/src/style.css`.
   - Fini quand : e2e vert ; axe (T14) toujours sans violation sur `#/` avec données ; qualité dashboard verte.
+  - Fait (2026-11-25) : tableau « Cours » (symbole-lien, nom, clôture, variation ▲/▼ signée, sparkline SVG avec
+    `aria-label`) dans un conteneur défilant focusable ; sections « Indicateurs clés », « Classement des stratégies »
+    et « Derniers signaux » vides en M1. Valeurs attendues des tests lues dans la fixture et formatées par
+    `lib/format.ts` (`resolveJsonModule` dans `e2e/tsconfig.json`). 49 tests e2e ; vérifié dans le navigateur sur
+    l'export réel (21 lignes, seules `manifest.json` et `overview.json` demandées).
 
 ## Ticker
 
