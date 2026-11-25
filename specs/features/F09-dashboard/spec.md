@@ -1,6 +1,6 @@
 # F09 — Dashboard GitHub Pages
 
-- **Statut** : 🔍 Verifying (M1, 2026-11-26 : 19/19 critères prouvés, en attente de validation)
+- **Statut** : ✔️ Done (M1, 2026-11-26) — M3 : ✅ Approved, plan à compléter
 - **Milestone** : M1 (exigences et critères `[M1]` : socle, Overview, Ticker) puis M3/M4 (`[M3]` : Portfolios,
   Portfolio, Models, Health, contenus dépendant des signaux et portefeuilles)
 - **Dépend de** : F08 (M1 pour `[M1]`, M3 pour `[M3]`) ; F00 R14 (`base` Vite configurable)
