@@ -21,6 +21,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 IGNORED_PATHS = [
     "dashboard/public/data/overview.json",
     "dashboard/dist/index.html",
+    "dashboard/dist-base/index.html",  # F09 R25 : builds e2e
+    "dashboard/test-results/results.json",
+    "dashboard/playwright-report/index.html",
     "node_modules/pkg/index.js",
     "dashboard/node_modules/pkg/index.js",
     ".venv/pyvenv.cfg",

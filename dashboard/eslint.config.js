@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   // src/types/ : code généré par `npm run gen:types` (vérifié par tsc, pas par eslint).
-  { ignores: ["dist/", "node_modules/", "public/data/", "src/types/"] },
+  { ignores: ["dist/", "dist-*/", "node_modules/", "public/data/", "src/types/", "test-results/", "playwright-report/"] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {

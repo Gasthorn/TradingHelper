@@ -119,7 +119,7 @@
 
 ## Tests de bout en bout et coque de l'application
 
-- [ ] **T10** Infrastructure Playwright — R25, R5
+- [x] **T10** Infrastructure Playwright — R25, R5
   - Tests : `e2e/disclaimer.spec.ts::exact P8 text on home` (sur la page actuelle) ; `e2e/support.spec.ts` :
     `useFixture` sert `dashboard/tests/fixtures/m1/manifest.json` à `<base>data/manifest.json` ; `failFile` renvoie 404
     ou du JSON invalide ; la collecte d'erreurs console fait échouer un test qui déclenche `console.error`.
@@ -131,6 +131,13 @@
     `test-results/`, `playwright-report/`, `dist-*/`), `.gitignore` (mêmes dossiers sous `dashboard/`).
   - Fini quand : e2e vert en local ; `git check-ignore dashboard/test-results dashboard/dist-base` les retourne ;
     qualité dashboard verte.
+  - Fait (2026-11-25) : `@playwright/test` 1.65.1, Chromium seul. Écarts : configuration dans
+    `e2e/playwright.config.ts` avec `e2e/tsconfig.json` (types Playwright isolés de `src/`, `typecheck` vérifie les
+    deux projets) au lieu de la racine ; builds e2e par `scripts/build-e2e.mjs` (API Vite, portable sous Windows) ;
+    projets `desktop`, `mobile` (375 × 812, `mobile.spec.ts`) et `base` (`/TradingHelper/`, `base.spec.ts`) ;
+    `useFixture` sert les fichiers par `route.fulfill({ path })` (aucune dépendance aux types Node) ;
+    `consoleErrors.allow(motif)` pour les erreurs attendues ; `gotoRoute`, `freezeClock`. Chemins ignorés ajoutés à
+    `test_repo_hygiene.py::IGNORED_PATHS`. 7 tests e2e (dont 2 échecs attendus qui prouvent la détection).
 
 - [ ] **T11** Coque : titre, routeur, page introuvable, en-tête — R1, R5, R10
   - Tests : `e2e/routing.spec.ts::deep link reload` (`#/ticker/AAPL` rechargé → page Ticker, encore vide), `::unknown
