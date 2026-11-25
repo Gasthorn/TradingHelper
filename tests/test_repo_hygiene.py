@@ -38,6 +38,8 @@ IGNORED_PATHS = [
 LF_EXTENSIONS = ["py", "json", "yaml", "yml", "ts", "tsx", "md", "toml"]
 # Au-delà du minimum R19 : fichiers du dashboard.
 LF_EXTENSIONS_DASHBOARD = ["js", "mjs", "cjs", "html", "css"]
+# F10 (T5) : un script bash en CRLF échoue sous Linux.
+LF_EXTENSIONS_SCRIPTS = ["sh"]
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
@@ -58,7 +60,9 @@ def test_gitignore_excludes(path: str) -> None:
     assert result.returncode == 0, f"{path} n'est pas ignoré par .gitignore"
 
 
-@pytest.mark.parametrize("extension", LF_EXTENSIONS + LF_EXTENSIONS_DASHBOARD)
+@pytest.mark.parametrize(
+    "extension", LF_EXTENSIONS + LF_EXTENSIONS_DASHBOARD + LF_EXTENSIONS_SCRIPTS
+)
 def test_gitattributes_forces_lf(extension: str) -> None:
     result = _git("check-attr", "eol", "--", f"any/file.{extension}")
 
@@ -251,6 +255,34 @@ def test_build_module_never_opens_files() -> None:
     assert calls == []
 
 
+#: F10 (T3) : `orchestration/commit_message.py` est pur : ni E/S, ni horloge, ni calendrier.
+COMMIT_MESSAGE_ALLOWED_IMPORTS = frozenset(
+    {"__future__", "collections", "datetime", "typing", "tradinghelper"}
+)
+
+
+def test_commit_message_module_is_pure() -> None:
+    path = REPO_ROOT / "src" / "tradinghelper" / "orchestration" / "commit_message.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            modules.add("." if node.level else node.module or "")
+    roots = {module.split(".")[0] for module in modules}
+    internal = {module for module in modules if module.startswith("tradinghelper")}
+    opens = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"
+    ]
+
+    assert roots <= COMMIT_MESSAGE_ALLOWED_IMPORTS, roots - COMMIT_MESSAGE_ALLOWED_IMPORTS
+    assert internal <= {"tradinghelper.schemas"}, internal
+    assert opens == []
+
+
 def test_imports_of_detects_violation(tmp_path: Path) -> None:
     """Garde-fou du détecteur : un import interdit est bien trouvé (absolu, `from`, sous-module)."""
     (tmp_path / "a.py").write_text("import pandas as pd\n", encoding="utf-8")
@@ -347,8 +379,40 @@ def test_readme_mentions_dashboard_url_and_github_settings() -> None:
     readme = _readme()
 
     assert "github.io/TradingHelper/" in readme
-    assert "active après F10" in readme
-    assert "Read and write permissions" in readme  # réglage manuel exigé par F10 R7
+    assert "active après F10" not in readme  # F10 livre le déploiement
+    # F10 R13 : les écritures sont accordées par les clés `permissions` des workflows ; le
+    # réglage du dépôt reste en lecture seule.
+    assert "Read and write permissions" not in readme
+
+
+def _readme_section(heading: str) -> str:
+    """Texte de la section `## heading` du README, jusqu'à la section de même niveau suivante."""
+    match = re.search(rf"^## {re.escape(heading)}\n(.*?)(?=^## |\Z)", _readme(), re.M | re.S)
+    assert match is not None, f"section « {heading} » absente du README"
+    return " ".join(match.group(1).split())  # retours à la ligne du texte ignorés
+
+
+def test_readme_has_mise_en_service_section() -> None:
+    """F10 R13 : réglages manuels et relances documentés."""
+    section = _readme_section("Mise en service")
+
+    assert "Pages → Build and deployment → Source** : « GitHub Actions »" in section
+    assert "Read repository contents" in section
+    assert "`permissions`" in section
+    assert "github-actions[bot]" in section  # protection de `main`
+    for workflow in ("daily", "backfill", "deploy-pages"):
+        assert f"`{workflow}`" in section, workflow
+    assert "Run workflow" in section  # relance manuelle (workflow_dispatch)
+
+
+def test_readme_documents_actions_limits() -> None:
+    """F10 R15 : limites de GitHub Actions acceptées et documentées."""
+    section = _readme_section("Mise en service")
+
+    assert "un seul run en attente" in section  # file d'attente `concurrency`
+    assert "retardés ou sautés" in section  # cron
+    assert "déploiement échoue" in section
+    assert "notifications" in section
 
 
 def test_license_is_mit() -> None:
@@ -505,3 +569,26 @@ def test_docs_list_export_modules() -> None:
     assert "uv run th export" in claude_md
     assert "npm run gen:types" in claude_md
     assert "build.py" in architecture
+
+
+def test_readme_documents_commit_message() -> None:
+    """F10 (T12) : `th commit-message` dans le tableau des commandes `th`."""
+    readme = _readme()
+
+    assert "| `uv run th commit-message --kind daily --since T0` |" in readme
+    assert "arrivent avec les features F07" in readme  # signaux, paper : toujours à venir
+
+
+def test_docs_list_orchestration_modules() -> None:
+    """F10 (plan) : `orchestration/commit_message.py` pur ; `scripts/ci/` dans l'arborescence."""
+    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    architecture = (REPO_ROOT / "specs" / "02-architecture.md").read_text(encoding="utf-8")
+    pure, _side_effects = next(
+        line for line in claude_md.splitlines() if line.startswith("- Fonctions pures")
+    ).split("effets de bord", 1)
+
+    assert "orchestration/commit_message.py" in pure
+    assert "uv run th commit-message" in claude_md
+    assert "scripts/ci/commit-and-push.sh" in claude_md
+    assert "orchestration/" in architecture
+    assert "commit-and-push.sh" in architecture

@@ -42,6 +42,7 @@ La CLI `th` expose une commande par étape du pipeline. Les commandes disponible
 | `uv run th validate` | Vérifie les fichiers de prix (règles bloquantes et avertissements), sans les modifier. |
 | `uv run th export` | Produit les fichiers JSON du dashboard dans `dashboard/public/data/`, sans modifier les données. |
 | `uv run th schemas` | Régénère les JSON Schemas de `schemas/` depuis `src/tradinghelper/schemas.py`. |
+| `uv run th commit-message --kind daily --since T0` | Affiche le message de commit des données d'un run démarré à `T0` (utilisé par les workflows, voir [Mise en service](#mise-en-service)). |
 
 Les étapes suivantes (signaux, paper trading…) arrivent avec les features F07 et au-delà.
 
@@ -171,8 +172,8 @@ puis `config/` à la racine du dépôt (trouvée en remontant depuis le dossier 
 
 ## Dashboard
 
-URL publique : <https://gasthorn.github.io/TradingHelper/> (**active après F10**, qui ajoute
-le déploiement sur GitHub Pages).
+URL publique : <https://gasthorn.github.io/TradingHelper/>, publiée par GitHub Actions après chaque
+run de données (voir [Mise en service](#mise-en-service)).
 
 En local :
 
@@ -186,11 +187,51 @@ TH_DASHBOARD_BASE=/TradingHelper/ npm run build     # build avec le chemin de ba
 
 Les données affichées (`dashboard/public/data/`) sont générées par `th export` et ne sont jamais commitées.
 
-### Réglages manuels du dépôt GitHub
+## Mise en service
 
-À faire une fois dans les paramètres du dépôt (requis par les workflows de F10) :
-- **Settings → Pages → Build and deployment → Source** : « GitHub Actions » ;
-- **Settings → Actions → General → Workflow permissions** : « Read and write permissions ».
+Les données sont mises à jour et le dashboard publié par trois workflows GitHub Actions :
+
+| Workflow | Déclenchement | Effet |
+|---|---|---|
+| `daily` | chaque soir de bourse à 22 h 30 UTC, ou à la main | `th ingest` → `th validate` → commit des données → publication |
+| `backfill` | à la main (symboles, `full`, `start`) | `th ingest` avec ces options → `th validate` → commit → publication |
+| `deploy-pages` | appelé par les deux précédents, ou push sur `main` touchant le site, le code ou les données | `th export` → build du dashboard → GitHub Pages |
+
+Les commits de données sont faits par `github-actions[bot]` (`data: daily update AAAA-MM-JJ`, avec la
+liste des historiques réécrits le cas échéant). Une violation détectée par `th validate` arrête tout :
+rien n'est commité ni publié, et le rapport de run reste téléchargeable dans l'artefact `run-report-…`
+du run.
+
+### Réglages à faire une fois
+
+- **Settings → Pages → Build and deployment → Source** : « GitHub Actions ». Sans ce réglage, le
+  premier déploiement échoue.
+- **Settings → Actions → General → Workflow permissions** : peut rester sur « Read repository
+  contents ». Chaque workflow accorde lui-même les droits dont il a besoin par ses clés `permissions`
+  (écriture du contenu pour commiter, Pages pour publier).
+- Si `main` est protégée, la règle doit laisser `github-actions[bot]` pousser les commits de données.
+
+### Relancer à la main
+
+Onglet **Actions** → choisir le workflow → **Run workflow** (sur `main`) :
+- `daily` : rattrape les séances manquantes et republie le site, même sans nouvelle donnée ;
+- `backfill` : `symbols` vide pour tout l'univers, `full` pour re-télécharger l'historique (et
+  réparer un fichier corrompu), `start` avec `full` seulement ;
+- `deploy-pages` : republie le site sans toucher aux données.
+
+Lancé sur une autre branche, `daily` ou `backfill` s'arrête avant le commit et ne publie rien.
+
+### Limites de GitHub Actions
+
+- Les workflows qui écrivent des données s'exécutent l'un après l'autre, mais GitHub ne garde qu'un
+  seul run en attente par groupe : un troisième lancement annule celui qui attend. Un `daily` annulé
+  est rattrapé par le suivant ; un `backfill` annulé est à relancer.
+- Les runs planifiés peuvent être retardés ou sautés par GitHub : le run suivant rattrape les séances
+  manquantes, et la séance traitée ne dépend pas de l'heure (passage de minuit compris).
+- Si un commit de données est poussé mais que le déploiement échoue, le site garde l'export
+  précédent jusqu'au prochain déploiement ou à une relance de `deploy-pages`.
+- Les notifications d'échec d'un run planifié vont à la dernière personne qui a modifié le cron du
+  workflow.
 
 ## Licence
 

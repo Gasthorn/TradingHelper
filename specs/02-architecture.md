@@ -5,7 +5,7 @@
 ```
                      ┌──────────────────────── GitHub Actions ─────────────────────────┐
                      │                                                                  │
- yFinance ──► [daily.yml] ingest ─► validate ─► features ─► signal ─► paper-trade ──┐   │
+ yFinance ──► [daily.yml] ingest ─► validate ─► signal ─► paper-trade ─────────────┐   │
                      │      │                                   ▲                  │   │
                      │      ▼ commit                            │ modèles promus   │   │
                      │  data/raw/prices/*.json            models/registry/         │   │
@@ -73,13 +73,15 @@ TradingHelper/
 │   ├── backtest/    engine.py, costs.py, metrics.py, walk_forward.py
 │   ├── portfolio/   paper.py
 │   ├── models/      train.py, registry.py, evaluate.py
-│   └── export/      build.py (pur), dashboard.py
+│   ├── export/      build.py (pur), dashboard.py
+│   └── orchestration/ commit_message.py (pur, message de commit des workflows)
 ├── tests/                       # miroir de src/ + fixtures/ (données figées)
 ├── research/                    # Notebooks d'exploration (non importés)
 ├── dashboard/                   # App Vite
 │   ├── src/ (pages/, components/, lib/data.ts, types/ générés depuis schemas/)
 │   └── public/data/             # ❌ non commité, rempli par `th export` en CI
 ├── specs/                       # SDD (ce dossier)
+├── scripts/ci/commit-and-push.sh # commit + push des données par le bot (daily, backfill, weekly-train)
 └── .github/workflows/
     ├── ci.yml
     ├── daily.yml
@@ -117,6 +119,13 @@ class Strategy(Protocol):
 - `concurrency: group: data-writer` partagé entre tous les workflows qui commitent, pour éviter les conflits de push.
 - Les commits du bot utilisent `github-actions[bot]` et un message préfixé `data:` / `model:`.
 - Permissions minimales par workflow (`contents: write` seulement où nécessaire ; `pages: write`, `id-token: write` pour le déploiement).
+  Le job qui appelle un workflow réutilisable doit accorder lui-même les permissions de celui-ci.
+- `deploy-pages.yml` utilise son propre groupe `concurrency` (`pages`) : un workflow appelé dans le même groupe que son
+  appelant se bloque ou s'annule.
+- Dans un run `schedule` ou un workflow appelé, `GITHUB_SHA` désigne le commit déclencheur, pas le commit de données
+  poussé pendant le run (et `GITHUB_*` n'est pas surchargeable) → le déploiement fait le checkout du SHA poussé et
+  transmet `TH_GIT_SHA` à `th export` (F10 R8).
+- `git diff --quiet` ignore les fichiers non suivis → tester `git status --porcelain` avant de commiter (F10 R3).
 
 ## Volumétrie estimée
 - 1 barre ≈ 90 octets → 20 tickers × 10 ans ≈ 4,5 Mo de JSON brut. Croissance ≈ 450 Ko/an. Acceptable pour git.

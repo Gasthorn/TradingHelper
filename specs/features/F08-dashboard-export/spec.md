@@ -67,7 +67,9 @@ compacts, pré-calculés, validés par schéma et optimisés pour le navigateur,
   de la dernière séance, `null` si une seule barre) et `spark` (les 60 dernières clôtures au plus), afin que la page
   Overview ne charge aucun fichier `tickers/*`. Il contient aussi `leaderboard`, `latest_signals` et `kpis` (R16).
 - **R11** `[M1]` `manifest.json` DOIT contenir `schema_version`, `generated_at` (UTC ISO-8601, horloge injectable),
-  `data_as_of`, `git_sha` (`GITHUB_SHA` s'il est défini, sinon `git rev-parse HEAD`, sinon `null`), `currency`,
+  `data_as_of`, `git_sha` (`TH_GIT_SHA` s'il est défini, sinon `git rev-parse HEAD`, sinon `GITHUB_SHA`, sinon `null` ;
+  ordre modifié le 2026-11-25 par F10 Q6 : en CI, `GITHUB_SHA` désigne le commit déclencheur, pas le commit de données
+  déployé), `currency`,
   `benchmark`, `tickers` (symbole, nom, secteur — pour le benchmark, nom = symbole et secteur `null` —,
   `benchmark: bool`, première et dernière date), `strategies` (vide en M1)
   et `files` : pour chaque autre fichier produit, `path` relatif à DIR, `sha256` (16 premiers caractères hexadécimaux du
@@ -145,6 +147,8 @@ compacts, pré-calculés, validés par schéma et optimisés pour le navigateur,
   des chaînes. (R14) — Preuve : `test_build.py::test_rounding_grid` (efficacité vérifiée par mutation : RSI à 4 décimales → échec, T18), `::test_low_priced_ticker_keeps_four_decimals` (cours vers 0,12 $), `::test_every_file_is_minified_utf8`, `::test_render_is_minified_utf8`.
 - [x] Deux exports sur les mêmes fixtures avec horloge et `git_sha` figés → fichiers identiques (SHA-256). (R15) — Preuve : `test_dashboard.py::test_two_exports_identical_bytes` ; réel : deux exports ne diffèrent que par `generated_at` (T24).
 - [x] Fixture synthétique seedée de 20 tickers × 15 ans : chaque fichier sous sa taille cible, export < 30 s. (R19) — Preuve : `test_dashboard.py::test_20_tickers_15_years_sizes_and_duration` (3 770 séances, prix à 4 décimales : `tickers/` ≤ 425,2 Ko, export 1,0 s, T20) ; réel : 4 250 séances, `tickers/` ≤ 412,8 Ko, 4,9 s (T24).
+- [ ] `git_sha` vaut `TH_GIT_SHA` s'il est défini, sinon `git rev-parse HEAD` même si `GITHUB_SHA` est défini, sinon
+  `GITHUB_SHA`, sinon `null`. (R11, modifié par F10 Q6 ; implémenté et vérifié dans F10)
 - [x] Aucun fichier source modifié (empreintes identiques) et aucun appel réseau (`pytest-socket`). (R1) — Preuve : `test_dashboard.py::test_sources_untouched` (SHA-256 de `data/` avant/après) ; `--disable-socket` dans `addopts`, `test_repo_hygiene.py::test_network_is_blocked` ; réel : sources identiques avant/après (T24).
 
 ### M3

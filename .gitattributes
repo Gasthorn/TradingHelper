@@ -19,6 +19,8 @@
 *.html text eol=lf
 *.css  text eol=lf
 .nvmrc text eol=lf
+# Scripts de CI (F10) : un script bash en CRLF échoue sous Linux.
+*.sh   text eol=lf
 LICENSE text eol=lf
 .python-version text eol=lf
 .gitignore      text eol=lf

@@ -508,17 +508,11 @@ def test_manifest_hashes_match_written_files(tmp_path: Path) -> None:
         assert entry["bytes"] == len(content)
 
 
-def test_git_sha_from_env(tmp_path: Path) -> None:
-    assert resolve_git_sha({"GITHUB_SHA": SHA.upper()}, tmp_path) == SHA
+OTHER_SHA = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c"
 
 
-def test_git_sha_invalid_env_ignored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
-
-    assert resolve_git_sha({"GITHUB_SHA": "pas-un-sha"}, tmp_path) is None
-
-
-def test_git_sha_from_git_repo(tmp_path: Path) -> None:
+def _git_repo(path: Path) -> str:
+    """Dépôt git avec un commit vide dans `path` ; renvoie le SHA de HEAD."""
     git = [
         "git",
         "-c",
@@ -528,16 +522,56 @@ def test_git_sha_from_git_repo(tmp_path: Path) -> None:
         "-c",
         "commit.gpgsign=false",
     ]
-    subprocess.run([*git, "init", "-q", str(tmp_path)], check=True)
-    subprocess.run(
-        [*git, "-C", str(tmp_path), "commit", "-q", "--allow-empty", "-m", "x"], check=True
-    )
-    head = subprocess.run(
-        ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
+    subprocess.run([*git, "init", "-q", str(path)], check=True)
+    subprocess.run([*git, "-C", str(path), "commit", "-q", "--allow-empty", "-m", "x"], check=True)
+    return subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "HEAD"],
         check=True,
         capture_output=True,
         text=True,
     ).stdout.strip()
+
+
+def test_git_sha_th_git_sha_first(tmp_path: Path) -> None:
+    """F10 R8 : `TH_GIT_SHA` l'emporte sur HEAD et sur `GITHUB_SHA` (F08 R11 modifié)."""
+    _git_repo(tmp_path)
+
+    environ = {"TH_GIT_SHA": SHA.upper(), "GITHUB_SHA": OTHER_SHA}
+
+    assert resolve_git_sha(environ, tmp_path) == SHA
+
+
+def test_git_sha_repo_head_before_github_sha(tmp_path: Path) -> None:
+    """En CI, `GITHUB_SHA` désigne le commit déclencheur : HEAD (commit déployé) l'emporte."""
+    head = _git_repo(tmp_path)
+
+    assert resolve_git_sha({"GITHUB_SHA": OTHER_SHA}, tmp_path) == head
+
+
+def test_git_sha_github_sha_fallback_outside_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+
+    assert resolve_git_sha({"GITHUB_SHA": SHA.upper()}, tmp_path) == SHA
+
+
+def test_git_sha_invalid_env_ignored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+
+    environ = {"TH_GIT_SHA": "pas-un-sha", "GITHUB_SHA": "pas-un-sha"}
+
+    assert resolve_git_sha(environ, tmp_path) is None
+
+
+def test_git_sha_invalid_th_git_sha_falls_back_to_head(tmp_path: Path) -> None:
+    head = _git_repo(tmp_path)
+
+    assert resolve_git_sha({"TH_GIT_SHA": "  "}, tmp_path) == head
+
+
+def test_git_sha_from_git_repo(tmp_path: Path) -> None:
+    head = _git_repo(tmp_path)
 
     assert resolve_git_sha({}, tmp_path) == head
 

@@ -22,7 +22,13 @@ from pydantic import BaseModel, ValidationError
 
 from tradinghelper.config import UniverseConfig, universe_targets
 from tradinghelper.data.calendar import NyseCalendar
-from tradinghelper.data.storage import PricesFileError, prices_path, read_json, read_prices
+from tradinghelper.data.storage import (
+    PricesFileError,
+    dated_files,
+    prices_path,
+    read_json,
+    read_prices,
+)
 from tradinghelper.export.build import (
     build_health,
     build_manifest,
@@ -41,7 +47,6 @@ from tradinghelper.schemas import (
 )
 
 #: Fichier daté `YYYY-MM-DD.json` (rapports de run, signaux) ; `latest.json` n'en est pas un.
-_DATED_FILE: Final = re.compile(r"^(\d{4}-\d{2}-\d{2})\.json$")
 
 
 @dataclass(frozen=True)
@@ -70,24 +75,6 @@ class Sources:
     prices: dict[str, PricesFile]  # symboles exportés, dans l'ordre de `universe_targets`
     reports: list[RunReport]  # `HEALTH_RUNS` plus récents, `session_date` décroissante
     signals: list[SignalsFile]  # tous les fichiers datés, par date croissante
-
-
-def _dated_files(directory: Path) -> list[tuple[date, Path]]:
-    """Fichiers `YYYY-MM-DD.json` (date valide) de `directory`, par date croissante ; les autres
-    noms (dont `latest.json`, temporaires, sauvegardes) sont ignorés. Dossier absent : []."""
-    if not directory.is_dir():
-        return []
-    found: list[tuple[date, Path]] = []
-    for path in directory.iterdir():
-        match = _DATED_FILE.match(path.name)
-        if match is None or not path.is_file():
-            continue
-        try:
-            day = date.fromisoformat(match.group(1))
-        except ValueError:
-            continue
-        found.append((day, path))
-    return sorted(found)
 
 
 def _read_model[M: BaseModel](
@@ -130,7 +117,7 @@ def _read_prices(
 def _read_reports(data_root: Path, problems: list[SourceProblem]) -> list[RunReport]:
     reports: list[RunReport] = []
     # Seuls les rapports résumés par health.json sont lus et validés (décision 4 du plan).
-    for day, path in reversed(_dated_files(data_root / "runs")[-HEALTH_RUNS:]):
+    for day, path in reversed(dated_files(data_root / "runs")[-HEALTH_RUNS:]):
         report = _read_model(RunReport, path, problems)
         if report is None:
             continue
@@ -145,7 +132,7 @@ def _read_reports(data_root: Path, problems: list[SourceProblem]) -> list[RunRep
 
 def _read_signals(data_root: Path, problems: list[SourceProblem]) -> list[SignalsFile]:
     signals: list[SignalsFile] = []
-    for day, path in _dated_files(data_root / "signals"):
+    for day, path in dated_files(data_root / "signals"):
         file = _read_model(SignalsFile, path, problems)
         if file is None:
             continue
@@ -235,12 +222,12 @@ def replace_dir(out: Path, files: Mapping[str, bytes]) -> None:
 _GIT_SHA: Final = re.compile(r"^[0-9a-f]{7,40}$")
 
 
-def resolve_git_sha(environ: Mapping[str, str], repo_root: Path) -> str | None:
-    """`GITHUB_SHA` (CI) s'il est valide, sinon `git rev-parse HEAD` dans `repo_root`, sinon
-    `None` (hors dépôt git, git absent) (R11)."""
-    from_env = environ.get("GITHUB_SHA", "").strip().lower()
-    if _GIT_SHA.match(from_env):
-        return from_env
+def _env_sha(environ: Mapping[str, str], name: str) -> str | None:
+    value = environ.get(name, "").strip().lower()
+    return value if _GIT_SHA.match(value) else None
+
+
+def _repo_head(repo_root: Path) -> str | None:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -254,6 +241,18 @@ def resolve_git_sha(environ: Mapping[str, str], repo_root: Path) -> str | None:
         return None
     sha = result.stdout.strip().lower()
     return sha if _GIT_SHA.match(sha) else None
+
+
+def resolve_git_sha(environ: Mapping[str, str], repo_root: Path) -> str | None:
+    """`TH_GIT_SHA` s'il est valide, sinon `git rev-parse HEAD` dans `repo_root`, sinon
+    `GITHUB_SHA` s'il est valide, sinon `None` (F08 R11, modifié par F10 R8).
+
+    En CI, `GITHUB_SHA` désigne le commit déclencheur du run, pas forcément le commit de données
+    déployé : il ne sert qu'en dernier recours, hors dépôt git.
+    """
+    return (
+        _env_sha(environ, "TH_GIT_SHA") or _repo_head(repo_root) or _env_sha(environ, "GITHUB_SHA")
+    )
 
 
 def render_files(

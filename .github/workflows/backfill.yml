@@ -1,0 +1,126 @@
+# Rattrapage ou réparation d'historique à la demande (spec F10 — M1).
+# Mêmes jobs que daily ; les valeurs saisies passent par `env:` (R14) et sont validées par
+# `th ingest` (F01 R13 : code 2, aucun appel réseau).
+name: backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Symboles séparés par des virgules (vide : tout l'univers et le benchmark)"
+        type: string
+        required: false
+        default: ""
+      full:
+        description: "Re-télécharger tout l'historique (--full)"
+        type: boolean
+        default: false
+      start:
+        description: "Date de début YYYY-MM-DD (avec --full uniquement)"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# Partagé par tous les workflows qui commitent des données (R2).
+concurrency:
+  group: data-writer
+  cancel-in-progress: false
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    outputs:
+      pushed_sha: ${{ steps.commit.outputs.pushed_sha }}
+      head_sha: ${{ steps.commit.outputs.head_sha }}
+      ingest_exit_code: ${{ steps.ingest.outputs.exit_code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: true
+      - name: Installation
+        run: uv sync --locked
+      - name: Début du run (T0)
+        id: t0
+        run: echo "value=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      # R7 : code 2 (arguments invalides) → arrêt ; code 1 → on continue, `conclude` tranche.
+      - name: Ingestion
+        id: ingest
+        env:
+          TH_IN_SYMBOLS: ${{ inputs.symbols }}
+          TH_IN_FULL: ${{ inputs.full }}
+          TH_IN_START: ${{ inputs.start }}
+        run: |
+          args=()
+          if [ -n "$TH_IN_SYMBOLS" ]; then args+=(--symbols "$TH_IN_SYMBOLS"); fi
+          if [ "$TH_IN_FULL" = "true" ]; then args+=(--full); fi
+          if [ -n "$TH_IN_START" ]; then args+=(--start "$TH_IN_START"); fi
+          set +e
+          uv run th ingest "${args[@]}"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; then exit "$code"; fi
+      - name: Validation
+        run: uv run th validate
+      - name: Commit et push des données
+        id: commit
+        if: github.ref == 'refs/heads/main'
+        env:
+          T0: ${{ steps.t0.outputs.value }}
+        run: |
+          MSG=$(uv run th commit-message --kind backfill --since "$T0")
+          bash scripts/ci/commit-and-push.sh "$MSG" data/
+      - name: Rapport de run (artefact)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: run-report-${{ github.run_id }}
+          path: data/runs/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # R9 : même règle que daily ; un lancement manuel sur main déploie toujours.
+  deploy:
+    needs: pipeline
+    if: needs.pipeline.outputs.pushed_sha != '' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-pages.yml
+    with:
+      ref: ${{ needs.pipeline.outputs.pushed_sha || needs.pipeline.outputs.head_sha }}
+
+  # R7 : issue du run, comme daily.
+  conclude:
+    needs: [pipeline, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    env:
+      PIPELINE_RESULT: ${{ needs.pipeline.result }}
+      DEPLOY_RESULT: ${{ needs.deploy.result }}
+      INGEST_EXIT_CODE: ${{ needs.pipeline.outputs.ingest_exit_code }}
+    steps:
+      - name: Issue du run
+        run: |
+          if [ "$PIPELINE_RESULT" != "success" ]; then
+            echo "::error::Job pipeline : $PIPELINE_RESULT (voir l'artefact run-report)."
+            exit 1
+          fi
+          if [ "$DEPLOY_RESULT" != "success" ] && [ "$DEPLOY_RESULT" != "skipped" ]; then
+            echo "::error::Déploiement : $DEPLOY_RESULT."
+            exit 1
+          fi
+          if [ "$INGEST_EXIT_CODE" = "1" ]; then
+            echo "::error::th ingest : tous les tickers tentés ont échoué (rapport commité et publié)."
+            exit 1
+          fi
+          echo "Run réussi."
