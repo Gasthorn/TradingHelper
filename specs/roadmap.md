@@ -29,7 +29,7 @@ Pages Portfolios/Health complètes, e2e, Lighthouse, documentation.
 | F02 | Qualité des données | M1 | F01 | ✔️ Done |
 | F08 | Export dashboard (partiel, crée `features/indicators.py`) | M1 | F01, F02 | ✔️ Done |
 | F09 | Dashboard (Overview, Ticker) | M1 | F08 | 📝 Draft |
-| F10 | Orchestration (daily, deploy, backfill) | M1 | F01, F02, F08 | ✅ Approved |
+| F10 | Orchestration (daily, deploy, backfill) | M1 | F01, F02, F08 | 🧭 Planned |
 | F03 | Features & labels | M2 | F01 | 📝 Draft |
 | F04 | Moteur de backtest & métriques | M2 | F01 | 📝 Draft |
 | F05 | Baselines | M2 | F04 | 📝 Draft |
