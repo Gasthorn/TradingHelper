@@ -11,17 +11,31 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
+from synthetic import sample_export_files
 from tradinghelper.cli import app
 from tradinghelper.schemas import (
+    HEALTH_RUNS,
+    MAX_QUALITY_WARNINGS,
     PRICE_COLUMNS,
     SCHEMA_MODELS,
+    SPARK_LENGTH,
+    ExportSignal,
+    HealthFile,
+    HealthRun,
     IngestTickerResult,
     IngestWarning,
+    ManifestFile,
+    OverviewFile,
     PricesFile,
     RunReport,
+    Signal,
+    SignalsFile,
+    TickerFile,
+    TickerSeries,
     ValidateRun,
     ValidateViolation,
     ValidateWarning,
@@ -495,11 +509,46 @@ def test_run_report_requires_schema_version_and_session_date() -> None:
 
 # --- Génération des JSON Schemas (`th schemas`) -------------------------------------------------
 
-EXPECTED_SCHEMA_FILES = ["prices.schema.json", "run_report.schema.json"]
+EXPECTED_SCHEMA_FILES = [
+    "export_health.schema.json",
+    "export_manifest.schema.json",
+    "export_overview.schema.json",
+    "export_ticker.schema.json",
+    "prices.schema.json",
+    "run_report.schema.json",
+    "signals.schema.json",
+]
 
 
 def test_schema_models_registry() -> None:
-    assert {"prices": PricesFile, "run_report": RunReport} == SCHEMA_MODELS
+    assert {"prices": PricesFile, "run_report": RunReport}.items() <= SCHEMA_MODELS.items()
+
+
+def test_schema_models_include_export_and_signals() -> None:
+    """F08 R4 : contrats §4 (signaux) et §7 (export) générés par `th schemas`."""
+    assert {
+        "signals": SignalsFile,
+        "export_manifest": ManifestFile,
+        "export_ticker": TickerFile,
+        "export_overview": OverviewFile,
+        "export_health": HealthFile,
+    }.items() <= SCHEMA_MODELS.items()
+    assert sorted(f"{name}.schema.json" for name in SCHEMA_MODELS) == EXPECTED_SCHEMA_FILES
+
+
+def test_no_stale_committed_schema() -> None:
+    """Chaque fichier de `schemas/` correspond à un modèle (aucun schéma orphelin)."""
+    committed = sorted(path.name for path in (REPO_ROOT / "schemas").glob("*.schema.json"))
+
+    assert committed == EXPECTED_SCHEMA_FILES
+
+
+def test_health_schema_uses_validate_alias() -> None:
+    """Le JSON Schema expose la clé `validate` (alias), que les types TS reprendront."""
+    schema = json.loads(render_json_schemas()["export_health.schema.json"])
+
+    assert "validate" in schema["$defs"]["HealthRun"]["properties"]
+    assert "validate_" not in json.dumps(schema)
 
 
 def test_render_json_schemas_format() -> None:
@@ -566,3 +615,412 @@ def test_schemas_command_works_without_config(
     assert result.exit_code == 0, result.output
     assert sorted(p.name for p in out_dir.iterdir()) == EXPECTED_SCHEMA_FILES
     assert "prices.schema.json" in result.stdout
+
+
+# --- Signaux — contrat §4 (F08 T5 ; réutilisés par F07) ------------------------------------------
+
+
+def _valid_signals() -> dict[str, Any]:
+    data: dict[str, Any] = _contract_example("4")
+    return data
+
+
+def _signals_with(**changes: Any) -> dict[str, Any]:
+    data = _valid_signals()
+    data["signals"][0].update(copy.deepcopy(changes))
+    return data
+
+
+def test_signals_file_contract_example_valid() -> None:
+    signals = SignalsFile.model_validate(_valid_signals())
+
+    (signal,) = signals.signals
+    assert signal.action == "BUY"
+    assert signal.explanation is not None
+    assert signal.explanation[0].feature == "rsi_14"
+
+
+def test_signals_file_explanation_is_optional() -> None:
+    data = _valid_signals()
+    del data["signals"][0]["explanation"]
+
+    (signal,) = SignalsFile.model_validate(data).signals
+
+    assert signal.explanation is None
+
+
+def test_signals_file_accepts_hold_and_sell() -> None:
+    for action in ("HOLD", "SELL"):
+        (signal,) = SignalsFile.model_validate(_signals_with(action=action)).signals
+        assert signal.action == action
+
+
+def _signals_top_level(**changes: Any) -> dict[str, Any]:
+    data = _valid_signals()
+    data.update(changes)
+    return data
+
+
+INVALID_SIGNALS: dict[str, dict[str, Any]] = {
+    "action_inconnue": _signals_with(action="STRONG_BUY"),
+    "confidence_sup_1": _signals_with(confidence=1.01),
+    "confidence_negative": _signals_with(confidence=-0.01),
+    "confidence_nan": _signals_with(confidence=float("nan")),
+    "target_weight_negatif": _signals_with(target_weight=-0.1),
+    "target_weight_sup_1": _signals_with(target_weight=1.5),
+    "horizon_nul": _signals_with(horizon_days=0),
+    "symbole_invalide": _signals_with(symbol="aapl"),
+    "cle_inconnue_signal": _signals_with(model="x"),
+    "explication_6_entrees": _signals_with(
+        explanation=[{"feature": f"f{i}", "contribution": 0.1} for i in range(6)]
+    ),
+    "cle_inconnue_fichier": _signals_top_level(extra=1),
+    "schema_version_2": _signals_top_level(schema_version=2),
+    "generated_at_non_utc": _signals_top_level(generated_at="2026-11-23T22:45:00+01:00"),
+}
+
+
+@pytest.mark.parametrize("data", list(INVALID_SIGNALS.values()), ids=list(INVALID_SIGNALS))
+def test_signals_file_rules(data: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        SignalsFile.model_validate(data)
+
+
+# --- Export dashboard : fiche ticker et accueil — contrat §7 (F08 T6) ----------------------------
+
+EXPORT_MANIFEST, EXPORT_TICKER, EXPORT_OVERVIEW, EXPORT_HEALTH = range(4)  # blocs JSON du §7
+
+
+def _ticker_example() -> dict[str, Any]:
+    data: dict[str, Any] = _contract_example("7", EXPORT_TICKER)
+    return data
+
+
+def _overview_example() -> dict[str, Any]:
+    data: dict[str, Any] = _contract_example("7", EXPORT_OVERVIEW)
+    return data
+
+
+def test_ticker_file_contract_example_valid() -> None:
+    ticker = TickerFile.model_validate(_ticker_example())
+
+    assert ticker.series.close == [230.95, 232.4]
+    assert ticker.markers[0].action == "BUY"
+
+
+def test_ticker_series_columns_match_contract() -> None:
+    """R6 : colonnes exportées, sans `adj_close` ni milieu de Bollinger."""
+    assert list(TickerSeries.model_fields) == [
+        "date", "open", "high", "low", "close", "volume",
+        "sma20", "sma50", "sma200", "bb_upper", "bb_lower", "rsi14",
+    ]  # fmt: skip
+
+
+def test_ticker_series_accepts_null_warmup() -> None:
+    data = _ticker_example()
+    data["series"]["sma200"] = [None, None]
+
+    assert TickerFile.model_validate(data).series.sma200 == [None, None]
+
+
+def test_ticker_series_lengths_must_match() -> None:
+    data = _ticker_example()
+    data["series"]["rsi14"] = [61.42]
+
+    with pytest.raises(ValidationError, match="longueur"):
+        TickerFile.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [
+        ("close", float("nan")),
+        ("open", float("inf")),
+        ("sma20", float("nan")),
+        ("rsi14", float("-inf")),
+    ],
+)
+def test_export_floats_reject_nan(column: str, value: float) -> None:
+    """R8, R14 : jamais de NaN ni d'infini dans un fichier d'export."""
+    data = _ticker_example()
+    data["series"][column][0] = value
+
+    with pytest.raises(ValidationError):
+        TickerFile.model_validate(data)
+
+
+def test_overview_change_1d_rejects_nan() -> None:
+    data = _overview_example()
+    data["tickers"][0]["change_1d"] = float("nan")
+
+    with pytest.raises(ValidationError):
+        OverviewFile.model_validate(data)
+
+
+def test_marker_action_buy_or_sell_only() -> None:
+    """R9 : HOLD n'est jamais un marqueur."""
+    data = _ticker_example()
+    data["markers"][0]["action"] = "HOLD"
+
+    with pytest.raises(ValidationError):
+        TickerFile.model_validate(data)
+
+
+def test_ticker_volume_is_non_negative_int() -> None:
+    data = _ticker_example()
+    data["series"]["volume"][0] = -1
+
+    with pytest.raises(ValidationError):
+        TickerFile.model_validate(data)
+
+
+def test_overview_contract_example_valid() -> None:
+    overview = OverviewFile.model_validate(_overview_example())
+
+    assert overview.tickers[0].spark[-1] == 232.4
+    assert overview.leaderboard == []
+    assert overview.latest_signals == []
+    assert overview.kpis.best_strategy_30d is None
+
+
+def test_overview_spark_max_60() -> None:
+    data = _overview_example()
+    data["tickers"][0]["spark"] = [100.0] * (SPARK_LENGTH + 1)
+
+    with pytest.raises(ValidationError):
+        OverviewFile.model_validate(data)
+
+
+def test_overview_m3_rows_typed() -> None:
+    """Sections M3 vides en M1 mais typées (R16) : une ligne de leaderboard et un signal enrichi."""
+    data = _overview_example()
+    data["leaderboard"] = [
+        {"strategy_id": "buy_hold", "kind": "baseline", "equity": 10234.56, "return_30d": 0.0123,
+         "sharpe_oos": 0.9, "random_percentile": 0.55}
+    ]  # fmt: skip
+    signal = dict(
+        _valid_signals()["signals"][0], model_id="lgbm_dir5_20261122_ab12cd", sharpe_oos=1.1
+    )
+    data["latest_signals"] = [signal]
+
+    overview = OverviewFile.model_validate(data)
+
+    assert overview.leaderboard[0].kind == "baseline"
+    assert overview.latest_signals[0].model_id == "lgbm_dir5_20261122_ab12cd"
+
+
+def test_export_signal_extends_signal() -> None:
+    """P8 : un signal exporté est un signal du §4 plus le modèle et sa performance."""
+    assert issubclass(ExportSignal, Signal)
+    assert {"model_id", "sharpe_oos"} <= set(ExportSignal.model_fields)
+    with pytest.raises(ValidationError):  # champs P8 obligatoires (nuls autorisés)
+        ExportSignal.model_validate(_valid_signals()["signals"][0])
+
+
+# --- Export dashboard : manifest et santé — contrat §7 (F08 T7) ----------------------------------
+
+
+def _manifest_example() -> dict[str, Any]:
+    data: dict[str, Any] = _contract_example("7", EXPORT_MANIFEST)
+    return data
+
+
+def _health_example() -> dict[str, Any]:
+    data: dict[str, Any] = _contract_example("7", EXPORT_HEALTH)
+    return data
+
+
+def test_manifest_contract_example_valid() -> None:
+    manifest = ManifestFile.model_validate(_manifest_example())
+
+    benchmark = manifest.tickers[-1]
+    assert (benchmark.symbol, benchmark.name, benchmark.sector) == ("SPY", "SPY", None)
+    assert benchmark.benchmark is True
+    assert manifest.strategies == []
+
+
+def test_manifest_m3_strategy_typed() -> None:
+    data = _manifest_example()
+    data["strategies"] = [
+        {"id": "lgbm_dir5_v3", "kind": "model", "model_id": "lgbm_dir5_20261122_ab12cd",
+         "sharpe_oos": 1.1},
+        {"id": "buy_hold", "kind": "baseline", "model_id": None, "sharpe_oos": None},
+    ]  # fmt: skip
+
+    assert [s.kind for s in ManifestFile.model_validate(data).strategies] == ["model", "baseline"]
+
+
+def _manifest_files(*paths: str) -> dict[str, Any]:
+    data = _manifest_example()
+    data["files"] = [{"path": p, "sha256": "0123456789abcdef", "bytes": 1} for p in paths]
+    return data
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [
+        ("tickers/AAPL.json", "health.json"),  # non trié
+        ("health.json", "health.json"),  # doublon
+        ("health.json", "manifest.json"),  # le manifest ne se liste pas lui-même
+        ("/health.json",),  # chemin absolu
+        (r"tickers\AAPL.json",),  # séparateur Windows
+    ],
+    ids=["unsorted", "duplicate", "self", "absolute", "backslash"],
+)
+def test_manifest_files_sorted_and_unique(paths: tuple[str, ...]) -> None:
+    with pytest.raises(ValidationError):
+        ManifestFile.model_validate(_manifest_files(*paths))
+
+
+def test_manifest_files_accepts_dotted_symbol() -> None:
+    manifest = ManifestFile.model_validate(_manifest_files("health.json", "tickers/BRK.B.json"))
+
+    assert [f.path for f in manifest.files] == ["health.json", "tickers/BRK.B.json"]
+
+
+@pytest.mark.parametrize("sha", ["0123456789ABCDEF", "0123456789abcde", "0123456789abcdef0", "xyz"])
+def test_manifest_sha256_16_hex(sha: str) -> None:
+    data = _manifest_example()
+    data["files"][0]["sha256"] = sha
+
+    with pytest.raises(ValidationError):
+        ManifestFile.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    ("git_sha", "valid"),
+    [
+        (None, True),
+        ("430115d", True),
+        ("430115d4c1f0e2b3a49587c6d1e0f2a3b4c5d6e7", True),
+        ("430115d…", False),
+        ("430115", False),
+        ("HEAD", False),
+    ],
+)
+def test_manifest_git_sha_pattern_or_null(git_sha: str | None, valid: bool) -> None:
+    data = _manifest_example()
+    data["git_sha"] = git_sha
+
+    if valid:
+        assert ManifestFile.model_validate(data).git_sha == git_sha
+    else:
+        with pytest.raises(ValidationError):
+            ManifestFile.model_validate(data)
+
+
+def test_manifest_tickers_unique() -> None:
+    data = _manifest_example()
+    data["tickers"].append(copy.deepcopy(data["tickers"][0]))
+
+    with pytest.raises(ValidationError, match="dupliqué"):
+        ManifestFile.model_validate(data)
+
+
+def test_health_contract_example_valid() -> None:
+    health = HealthFile.model_validate(_health_example())
+
+    assert health.runs[0].validate_ is not None
+    assert health.runs[0].ingest is not None
+    assert health.runs[0].ingest.history_rewritten == ["AAPL"]
+    assert health.quality_warnings[0].rule == "large_move"
+
+
+@pytest.mark.parametrize(
+    "ticker",
+    [
+        {"symbol": "TSLA", "last_date": None, "sessions_behind": None, "stale": False},
+        {"symbol": "TSLA", "last_date": None, "sessions_behind": 3, "stale": True},
+        {"symbol": "TSLA", "last_date": "2026-11-23", "sessions_behind": None, "stale": False},
+    ],
+    ids=["missing_not_stale", "missing_with_lag", "file_without_lag"],
+)
+def test_health_ticker_without_file_must_be_stale(ticker: dict[str, Any]) -> None:
+    """R12 : sans fichier, `last_date` et `sessions_behind` nuls et `stale: true`."""
+    data = _health_example()
+    data["tickers"] = [ticker]
+
+    with pytest.raises(ValidationError):
+        HealthFile.model_validate(data)
+
+
+def test_health_run_validate_alias_roundtrip() -> None:
+    """Clé JSON `validate` (champ Python `validate_`), jamais `validate_` dans la sortie."""
+    run = _health_example()["runs"][0]
+
+    dumped = HealthRun.model_validate(run).model_dump(mode="json", by_alias=True)
+
+    assert dumped == run
+    assert "validate_" not in json.dumps(dumped)
+
+
+def test_health_run_defines_validate_without_shadow_warning() -> None:
+    code = "import warnings; warnings.simplefilter('error'); import tradinghelper.schemas"
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=False
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def _health_runs(count: int) -> list[dict[str, Any]]:
+    base = _health_example()["runs"][0]
+    return [dict(copy.deepcopy(base), session_date=f"2026-11-{30 - i:02d}") for i in range(count)]
+
+
+def test_health_limits() -> None:
+    """R12 : au plus 10 rapports et 100 avertissements."""
+    data = _health_example()
+    data["runs"] = _health_runs(HEALTH_RUNS)
+    HealthFile.model_validate(data)
+
+    data["runs"] = _health_runs(HEALTH_RUNS + 1)
+    with pytest.raises(ValidationError):
+        HealthFile.model_validate(data)
+
+    data = _health_example()
+    data["quality_warnings"] = data["quality_warnings"] * (MAX_QUALITY_WARNINGS + 1)
+    with pytest.raises(ValidationError):
+        HealthFile.model_validate(data)
+
+
+def test_health_runs_sorted_by_session_desc() -> None:
+    data = _health_example()
+    data["runs"] = list(reversed(_health_runs(3)))
+
+    with pytest.raises(ValidationError, match="décroissant"):
+        HealthFile.model_validate(data)
+
+
+# --- Sorties de l'export validées par les JSON Schemas (F08 T18) ---------------------------------
+
+
+def _schema_for(path: str) -> str:
+    if path.startswith("tickers/"):
+        return "export_ticker.schema.json"
+    return f"export_{path.removesuffix('.json')}.schema.json"
+
+
+def test_export_outputs_match_json_schemas() -> None:
+    """R1, R4 : chaque fichier produit est valide pour son JSON Schema (Draft 2020-12) de
+    `schemas/`, en plus de son modèle pydantic (validé à la construction)."""
+    files = sample_export_files()
+
+    assert sorted({_schema_for(path) for path in files}) == [
+        "export_health.schema.json", "export_manifest.schema.json",
+        "export_overview.schema.json", "export_ticker.schema.json",
+    ]  # fmt: skip
+    for path, content in files.items():
+        schema = json.loads((REPO_ROOT / "schemas" / _schema_for(path)).read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
+        errors = list(Draft202012Validator(schema).iter_errors(json.loads(content)))
+        assert errors == [], f"{path} : {errors[0].message}"
+
+
+def test_json_schema_detects_contract_violation() -> None:
+    """Garde-fou : le validateur détecte bien un fichier hors contrat (colonne manquante)."""
+    ticker = json.loads(sample_export_files()["tickers/AAPL.json"])
+    del ticker["series"]["rsi14"]
+    schema = json.loads((REPO_ROOT / "schemas" / "export_ticker.schema.json").read_text("utf-8"))
+
+    assert list(Draft202012Validator(schema).iter_errors(ticker))

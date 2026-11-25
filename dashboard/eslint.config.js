@@ -3,7 +3,8 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/", "node_modules/", "public/data/"] },
+  // src/types/ : code généré par `npm run gen:types` (vérifié par tsc, pas par eslint).
+  { ignores: ["dist/", "node_modules/", "public/data/", "src/types/"] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {

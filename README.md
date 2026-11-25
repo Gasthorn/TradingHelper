@@ -40,9 +40,10 @@ La CLI `th` expose une commande par étape du pipeline. Les commandes disponible
 | `uv run th version` | Affiche la version du package (`tradinghelper X.Y.Z`). |
 | `uv run th ingest` | Télécharge les cours journaliers (yfinance) de l'univers et du benchmark. |
 | `uv run th validate` | Vérifie les fichiers de prix (règles bloquantes et avertissements), sans les modifier. |
+| `uv run th export` | Produit les fichiers JSON du dashboard dans `dashboard/public/data/`, sans modifier les données. |
 | `uv run th schemas` | Régénère les JSON Schemas de `schemas/` depuis `src/tradinghelper/schemas.py`. |
 
-Les étapes suivantes (`th export`…) arrivent avec les features F08 et au-delà.
+Les étapes suivantes (signaux, paper trading…) arrivent avec les features F07 et au-delà.
 
 ### `th ingest`
 
@@ -119,6 +120,42 @@ existe déjà (écrit par `th ingest` le même jour) ou s'il y a une violation ;
 n'écrit aucun rapport. Un rapport existant illisible n'est jamais écrasé. Pour réparer un fichier en
 violation : `uv run th ingest --symbols X --full`.
 
+### `th export`
+
+Transforme les données du dépôt en fichiers JSON compacts pour le dashboard
+([contrat §7](specs/03-data-contracts.md)), **sans modifier** `data/` et sans appel réseau :
+
+- `manifest.json` : date des données (`data_as_of`, celle du symbole le plus en retard), SHA git, symboles,
+  et empreinte de chaque fichier (le dashboard s'en sert pour invalider son cache) ;
+- `overview.json` : dernier cours, variation du jour et 60 dernières clôtures par symbole ;
+- `tickers/{SYMBOLE}.json` : OHLCV, SMA 20/50/200, bandes de Bollinger, RSI 14 et signaux BUY/SELL ;
+- `health.json` : fraîcheur de chaque symbole, résumé des 10 derniers rapports de run, avertissements qualité.
+
+Les sections qui dépendent de features pas encore livrées (classement, portefeuilles, modèles) sont
+exportées vides. Le JSON est minifié et les nombres arrondis (prix à 4 décimales, RSI à 2).
+
+```bash
+uv run th export                       # vers dashboard/public/data/ (dossier par défaut)
+uv run th export --out /tmp/export     # vers un autre dossier
+```
+
+Le dossier de sortie est **reconstruit entièrement** à chaque run : il est écrit à côté, puis remplace
+l'ancien, si bien qu'aucun fichier obsolète ne subsiste et qu'un échec laisse l'export précédent intact.
+Par sécurité, `--out` refuse la racine du dépôt, le dossier de données, un fichier, ou un dossier non vide
+qui ne contient pas de `manifest.json` (il ne s'agit pas d'un export précédent).
+
+Codes de sortie :
+
+| Code | Signification |
+|---|---|
+| `0` | Export écrit ; un résumé (fichiers, taille, date des données) est affiché. |
+| `1` | Un fichier source est illisible ou hors contrat : chaque fichier fautif est cité sur stderr et aucun fichier n'est écrit. |
+| `2` | Configuration invalide ou dossier de sortie refusé. |
+
+Les types TypeScript du dashboard (`dashboard/src/types/`) sont générés depuis `schemas/` par
+`npm run gen:types` (dans `dashboard/`) : à relancer après `uv run th schemas`. La CI échoue s'ils ne
+sont pas à jour.
+
 ### Configuration
 
 Toute commande (sauf `th schemas`) charge et valide `config/universe.yaml`, `config/backtest.yaml` et `config/strategies.yaml`.
@@ -140,6 +177,7 @@ le déploiement sur GitHub Pages).
 En local :
 
 ```bash
+uv run th export                                    # données de dashboard/public/data/ (à la racine)
 cd dashboard
 npm run dev                                         # serveur de développement
 npm run build                                       # build statique dans dashboard/dist/

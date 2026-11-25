@@ -7,6 +7,7 @@ import importlib
 import re
 import socket
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -121,13 +122,35 @@ PROVIDER_MODULES = {
 }
 
 
-@pytest.mark.parametrize("package", sorted(PROVIDER_MODULES))
+#: F08 (T1) : paquets importés directement, non confinés à un module.
+DIRECT_PACKAGES = ("numpy", "hypothesis", "jsonschema")
+
+
+@pytest.mark.parametrize("package", sorted(PROVIDER_MODULES) + list(DIRECT_PACKAGES))
 # À l'import, urllib3 (tiré par yfinance) sonde IPv6 en créant une socket locale sur `::1`, sans
 # réseau, et ignore l'échec : pytest-socket la bloque et émet ce UserWarning, sans conséquence.
 @pytest.mark.filterwarnings("ignore:A test tried to use socket:UserWarning")
 def test_provider_packages_importable(package: str) -> None:
-    """F01 R5, R16 : dépendances déclarées et importables sans réseau."""
+    """F01 R5, R16, F08 R7/R8/R1 : dépendances déclarées et importables sans réseau."""
     importlib.import_module(package)
+
+
+def _declared(requirements: list[str]) -> set[str]:
+    """Noms de paquets d'une liste de spécifications PEP 508 (`numpy>=2.5` → `numpy`)."""
+    return {re.split(r"[<>=!~;\[ ]", req, maxsplit=1)[0].lower() for req in requirements}
+
+
+def test_direct_dependencies_declared() -> None:
+    """F08 (plan) : numpy importé par `features/` est une dépendance directe, pas seulement
+    transitive ; hypothesis et jsonschema ne servent qu'aux tests (groupe `dev`)."""
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    runtime = _declared(pyproject["project"]["dependencies"])
+    dev = _declared(pyproject["dependency-groups"]["dev"])
+
+    assert "numpy" in runtime
+    assert {"hypothesis", "jsonschema"} <= dev
+    assert not {"hypothesis", "jsonschema"} & runtime
 
 
 @pytest.mark.parametrize(("package", "allowed"), sorted(PROVIDER_MODULES.items()))
@@ -169,6 +192,62 @@ def test_quality_module_never_opens_files() -> None:
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"
     ]
 
+    assert calls == []
+
+
+#: F08 (T2) : `features/indicators.py` est pur et ne dépend que de numpy (pas de pandas, ni E/S).
+INDICATORS_ALLOWED_IMPORTS = frozenset({"__future__", "typing", "numpy"})
+
+
+def test_indicators_module_is_pure() -> None:
+    path = REPO_ROOT / "src" / "tradinghelper" / "features" / "indicators.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    roots: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            roots.add("." if node.level else (node.module or "").split(".")[0])
+    opens = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"
+    ]
+
+    assert roots <= INDICATORS_ALLOWED_IMPORTS, roots - INDICATORS_ALLOWED_IMPORTS
+    assert opens == []
+
+
+#: F08 (plan) : `export/build.py` construit les fichiers en mémoire, sans aucune E/S.
+BUILD_FORBIDDEN_IMPORTS = (
+    "os",
+    "pathlib",
+    "io",
+    "shutil",
+    "tempfile",
+    "subprocess",
+    "tradinghelper.data.storage",
+)
+
+
+@pytest.mark.parametrize("package", BUILD_FORBIDDEN_IMPORTS)
+def test_build_module_is_pure(package: str) -> None:
+    export_pkg = REPO_ROOT / "src" / "tradinghelper" / "export"
+    offenders = [loc for loc in _imports_of(export_pkg, package) if loc.startswith("build.py:")]
+
+    assert offenders == []
+
+
+def test_build_module_never_opens_files() -> None:
+    path = REPO_ROOT / "src" / "tradinghelper" / "export" / "build.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    calls = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open"
+    ]
+
+    assert path.is_file()
     assert calls == []
 
 
@@ -374,3 +453,55 @@ def test_license_forced_lf() -> None:
     result = _git("check-attr", "eol", "--", "LICENSE")
 
     assert result.stdout.strip() == "LICENSE: eol: lf"
+
+
+def _step_index(job: str, command: str) -> int:
+    for index, step in enumerate(_steps(job)):
+        if command in str(step.get("run", "")):
+            return index
+    raise AssertionError(f"aucune étape `{command}` dans le job {job}")
+
+
+def test_ci_dashboard_job_checks_generated_types() -> None:
+    """F08 R5 : la CI échoue si `npm run gen:types` modifie ou ajoute un fichier de src/types/.
+
+    `git status --porcelain` (et non `git diff`) détecte aussi un type non commité (nouveau
+    schéma), qu'un `git diff` ignorerait car le fichier serait non suivi.
+    """
+    gen = _step_index("dashboard", "npm run gen:types")
+    run = str(_steps("dashboard")[gen]["run"])
+
+    assert 'test -z "$(git status --porcelain -- src/types)"' in run
+    assert _step_index("dashboard", "npm ci") < gen < _step_index("dashboard", "npm run typecheck")
+
+
+def test_readme_documents_export() -> None:
+    """F08 (T23) : commande `th export`, `--out`, codes de sortie, types TS générés."""
+    readme = _readme()
+
+    assert "### `th export`" in readme
+    for expected in (
+        "uv run th export",
+        "--out",
+        "dashboard/public/data",
+        "manifest.json",
+        "npm run gen:types",
+        "aucun fichier n'est écrit",
+    ):
+        assert expected in readme, expected
+    assert "arrivent avec les features F08" not in readme
+
+
+def test_docs_list_export_modules() -> None:
+    """F08 (plan, décision 6) : `export/build.py` pur, `export/dashboard.py` à effets de bord."""
+    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    architecture = (REPO_ROOT / "specs" / "02-architecture.md").read_text(encoding="utf-8")
+    pure, side_effects = next(
+        line for line in claude_md.splitlines() if line.startswith("- Fonctions pures")
+    ).split("effets de bord", 1)
+
+    assert "export/build.py" in pure
+    assert "export/dashboard.py" in side_effects
+    assert "uv run th export" in claude_md
+    assert "npm run gen:types" in claude_md
+    assert "build.py" in architecture

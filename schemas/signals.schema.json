@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "FeatureContribution": {
+      "additionalProperties": false,
+      "description": "Contribution d'une feature à la prédiction (SHAP / gain).",
+      "properties": {
+        "feature": {
+          "title": "Feature",
+          "type": "string"
+        },
+        "contribution": {
+          "title": "Contribution",
+          "type": "number"
+        }
+      },
+      "required": [
+        "feature",
+        "contribution"
+      ],
+      "title": "FeatureContribution",
+      "type": "object"
+    },
+    "Signal": {
+      "additionalProperties": false,
+      "description": "Signal d'une stratégie pour un symbole à une séance.",
+      "properties": {
+        "strategy_id": {
+          "title": "Strategy Id",
+          "type": "string"
+        },
+        "symbol": {
+          "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "BUY",
+            "HOLD",
+            "SELL"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "target_weight": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Target Weight",
+          "type": "number"
+        },
+        "horizon_days": {
+          "exclusiveMinimum": 0,
+          "title": "Horizon Days",
+          "type": "integer"
+        },
+        "explanation": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FeatureContribution"
+              },
+              "maxItems": 5,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Explanation"
+        }
+      },
+      "required": [
+        "strategy_id",
+        "symbol",
+        "action",
+        "confidence",
+        "target_weight",
+        "horizon_days"
+      ],
+      "title": "Signal",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Signaux de toutes les stratégies actives pour une séance.",
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "date": {
+      "format": "date",
+      "title": "Date",
+      "type": "string"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "signals": {
+      "items": {
+        "$ref": "#/$defs/Signal"
+      },
+      "title": "Signals",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "date",
+    "generated_at",
+    "signals"
+  ],
+  "title": "SignalsFile",
+  "type": "object"
+}

@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ExportMarker": {
+      "additionalProperties": false,
+      "description": "Signal BUY/SELL affiché sur le graphique d'un ticker (R9) ; les HOLD ne sont pas exportés.",
+      "properties": {
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "strategy_id": {
+          "title": "Strategy Id",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "BUY",
+            "SELL"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "date",
+        "strategy_id",
+        "action",
+        "confidence"
+      ],
+      "title": "ExportMarker",
+      "type": "object"
+    },
+    "TickerSeries": {
+      "additionalProperties": false,
+      "description": "Colonnes de la fiche ticker (R6), toutes de même longueur ; `null` pendant le warm-up (R8).\n\nOHLC ajustés des splits (tels que stockés, §2) ; indicateurs calculés sur `close`.",
+      "properties": {
+        "date": {
+          "items": {
+            "format": "date",
+            "type": "string"
+          },
+          "title": "Date",
+          "type": "array"
+        },
+        "open": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Open",
+          "type": "array"
+        },
+        "high": {
+          "items": {
+            "type": "number"
+          },
+          "title": "High",
+          "type": "array"
+        },
+        "low": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Low",
+          "type": "array"
+        },
+        "close": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Close",
+          "type": "array"
+        },
+        "volume": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Volume",
+          "type": "array"
+        },
+        "sma20": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Sma20",
+          "type": "array"
+        },
+        "sma50": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Sma50",
+          "type": "array"
+        },
+        "sma200": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Sma200",
+          "type": "array"
+        },
+        "bb_upper": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Bb Upper",
+          "type": "array"
+        },
+        "bb_lower": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Bb Lower",
+          "type": "array"
+        },
+        "rsi14": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Rsi14",
+          "type": "array"
+        }
+      },
+      "required": [
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "sma20",
+        "sma50",
+        "sma200",
+        "bb_upper",
+        "bb_lower",
+        "rsi14"
+      ],
+      "title": "TickerSeries",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`tickers/{SYMBOL}.json` (R6, R9).",
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "symbol": {
+      "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+      "title": "Symbol",
+      "type": "string"
+    },
+    "series": {
+      "$ref": "#/$defs/TickerSeries"
+    },
+    "markers": {
+      "items": {
+        "$ref": "#/$defs/ExportMarker"
+      },
+      "title": "Markers",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "symbol",
+    "series",
+    "markers"
+  ],
+  "title": "TickerFile",
+  "type": "object"
+}

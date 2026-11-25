@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ManifestEntry": {
+      "additionalProperties": false,
+      "description": "Fichier produit par l'export : empreinte pour le cache-busting du front (R11).",
+      "properties": {
+        "path": {
+          "pattern": "^[A-Za-z0-9_.\\-]+(/[A-Za-z0-9_.\\-]+)*$",
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{16}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "bytes": {
+          "minimum": 0,
+          "title": "Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "bytes"
+      ],
+      "title": "ManifestEntry",
+      "type": "object"
+    },
+    "ManifestStrategy": {
+      "additionalProperties": false,
+      "description": "Stratégie exportée (M3, R16) : modèle champion et performance, pour l'affichage P8.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "baseline",
+            "model"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model Id"
+        },
+        "sharpe_oos": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sharpe Oos"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "model_id",
+        "sharpe_oos"
+      ],
+      "title": "ManifestStrategy",
+      "type": "object"
+    },
+    "ManifestTicker": {
+      "additionalProperties": false,
+      "description": "Symbole exporté (R11) ; pour le benchmark hors univers, nom = symbole et secteur `null`.",
+      "properties": {
+        "symbol": {
+          "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+          "title": "Symbol",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "sector": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sector"
+        },
+        "benchmark": {
+          "title": "Benchmark",
+          "type": "boolean"
+        },
+        "first_date": {
+          "format": "date",
+          "title": "First Date",
+          "type": "string"
+        },
+        "last_date": {
+          "format": "date",
+          "title": "Last Date",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "name",
+        "sector",
+        "benchmark",
+        "first_date",
+        "last_date"
+      ],
+      "title": "ManifestTicker",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`manifest.json` (R11).",
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "data_as_of": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Data As Of"
+    },
+    "git_sha": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{7,40}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Git Sha"
+    },
+    "currency": {
+      "const": "USD",
+      "title": "Currency",
+      "type": "string"
+    },
+    "benchmark": {
+      "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$",
+      "title": "Benchmark",
+      "type": "string"
+    },
+    "tickers": {
+      "items": {
+        "$ref": "#/$defs/ManifestTicker"
+      },
+      "title": "Tickers",
+      "type": "array"
+    },
+    "strategies": {
+      "items": {
+        "$ref": "#/$defs/ManifestStrategy"
+      },
+      "title": "Strategies",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/ManifestEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "generated_at",
+    "data_as_of",
+    "git_sha",
+    "currency",
+    "benchmark",
+    "tickers",
+    "strategies",
+    "files"
+  ],
+  "title": "ManifestFile",
+  "type": "object"
+}

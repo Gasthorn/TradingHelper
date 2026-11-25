@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-19",
+  "generated_at": "2026-11-19T22:45:00Z",
+  "signals": [
+    {
+      "strategy_id": "lgbm_dir5_v3",
+      "symbol": "AAPL",
+      "action": "HOLD",
+      "confidence": 0.52,
+      "target_weight": 0.0,
+      "horizon_days": 5
+    }
+  ]
+}

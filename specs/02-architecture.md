@@ -73,7 +73,7 @@ TradingHelper/
 │   ├── backtest/    engine.py, costs.py, metrics.py, walk_forward.py
 │   ├── portfolio/   paper.py
 │   ├── models/      train.py, registry.py, evaluate.py
-│   └── export/      dashboard.py
+│   └── export/      build.py (pur), dashboard.py
 ├── tests/                       # miroir de src/ + fixtures/ (données figées)
 ├── research/                    # Notebooks d'exploration (non importés)
 ├── dashboard/                   # App Vite
