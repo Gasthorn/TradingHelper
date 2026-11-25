@@ -48,13 +48,16 @@
     du source par import `?raw`, commentaires retirés avant analyse ; `dayNumber` refuse une date mal formée ou
     inexistante (`RangeError`). 54 tests (27 × 2 fuseaux).
 
-- [ ] **T4** Périodes et séries — R16, R15
+- [x] **T4** Périodes et séries — R16, R15
   - Tests : `dates.test.ts::periodStart` (1M depuis le 2026-11-23 → 2026-10-23 ; depuis le 31 mars → 28/29 février ;
     1A, 5A ; Max → `null`) ; `src/lib/series.test.ts` : `periodWindow` (fenêtre exacte, historique plus court que la
     période → série complète, Max), `linePoints` (exclut les `null`, respecte la fenêtre), `isAllNull`.
   - Fichiers : `dashboard/src/lib/dates.ts` (`Period`, `periodStart`), `dashboard/src/lib/series.ts`,
     `dashboard/src/lib/series.test.ts`.
   - Fini quand : tests verts ; qualité dashboard verte.
+  - Fait (2026-11-25) : `periodStart` en arithmétique de mois (jour borné à la fin du mois), `PERIODS` exporté
+    pour le sélecteur ; `periodWindow` par recherche dichotomique (ordre lexical des dates) ; série vide → fenêtre
+    `{ from: 0, to: -1 }`. 34 tests ajoutés (17 × 2 fuseaux).
 
 - [ ] **T5** [P] Routes — R1, R14
   - Tests : `src/lib/routes.test.ts` : `#/`, `''`, `#` → overview ; `#/ticker/AAPL` ; `#/ticker/brk.b` → `BRK.B` ;

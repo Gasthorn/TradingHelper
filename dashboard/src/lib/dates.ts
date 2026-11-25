@@ -78,6 +78,34 @@ export function sessionsBehind(d: CivilDate, today: CivilDate): number {
   return Math.max(0, weekdaysBefore(to) - weekdaysBefore(from));
 }
 
+/** Périodes du sélecteur de la page Ticker (R16). */
+export type Period = "1M" | "6M" | "1A" | "5A" | "Max";
+
+export const PERIODS: readonly Period[] = ["1M", "6M", "1A", "5A", "Max"];
+
+const PERIOD_MONTHS: Record<Exclude<Period, "Max">, number> = { "1M": 1, "6M": 6, "1A": 12, "5A": 60 };
+
+function pad(n: number, width: number): string {
+  return String(n).padStart(width, "0");
+}
+
+/**
+ * Borne inférieure d'une période : `last` − N mois calendaires, jour borné à la fin du mois
+ * d'arrivée (31 mars − 1 mois = 28 ou 29 février). `null` pour Max (aucune borne).
+ */
+export function periodStart(last: CivilDate, period: Period): CivilDate | null {
+  if (period === "Max") return null;
+  dayNumber(last); // valide la date
+  const year = Number(last.slice(0, 4));
+  const month = Number(last.slice(5, 7));
+  const day = Number(last.slice(8, 10));
+  const index = year * 12 + (month - 1) - PERIOD_MONTHS[period];
+  const y = Math.floor(index / 12);
+  const m = index - y * 12 + 1;
+  const monthLength = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${pad(y, 4)}-${pad(m, 2)}-${pad(Math.min(day, monthLength), 2)}`;
+}
+
 /** Seuil de péremption, identique à F02 : périmé si le retard dépasse 3 séances. */
 export const STALE_AFTER = 3;
 

@@ -7,6 +7,7 @@ import {
   freshness,
   fromDayNumber,
   lastAssumedSession,
+  periodStart,
   sessionsBehind,
   todayInNewYork,
 } from "./dates";
@@ -115,6 +116,32 @@ describe("freshness (R6)", () => {
 
   it("est à jour le lendemain de la séance", () => {
     expect(freshness("2026-11-23", "2026-11-24")).toEqual({ kind: "fresh", behind: 0 });
+  });
+});
+
+describe("periodStart (R16)", () => {
+  it.each([
+    ["1M", "2026-10-23"],
+    ["6M", "2026-05-23"],
+    ["1A", "2025-11-23"],
+    ["5A", "2021-11-23"],
+  ] as const)("%s depuis le 2026-11-23 → %s", (period, expected) => {
+    expect(periodStart("2026-11-23", period)).toBe(expected);
+  });
+
+  it("Max n'a pas de borne", () => {
+    expect(periodStart("2026-11-23", "Max")).toBeNull();
+  });
+
+  it("borne le jour à la fin d'un mois plus court", () => {
+    expect(periodStart("2026-03-31", "1M")).toBe("2026-02-28");
+    expect(periodStart("2024-03-31", "1M")).toBe("2024-02-29");
+    expect(periodStart("2026-05-31", "6M")).toBe("2025-11-30");
+    expect(periodStart("2024-02-29", "1A")).toBe("2023-02-28");
+  });
+
+  it("traverse le changement d'année", () => {
+    expect(periodStart("2026-01-15", "1M")).toBe("2025-12-15");
   });
 });
 
