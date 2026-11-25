@@ -300,13 +300,18 @@
     servie sous `/TradingHelper/` avec le bandeau P8 ; le parcours Overview → fiche → accueil reste sous la base.
     90 tests e2e (dont 4 du projet `base`).
 
-- [ ] **T22** [P] Requêtes de données — R2
+- [x] **T22** [P] Requêtes de données — R2
   - Tests : `e2e/loading.spec.ts::urls carry manifest hash` (chaque requête de données hors manifest porte `?v=` égal au
     `sha256` du manifest), `::manifest no-cache` (en-tête de requête `cache-control: no-cache` ou mode `no-cache`
     observé), `::file fetched once` (aller `#/ticker/AAPL` → `#/` → `#/ticker/AAPL` : une seule requête
     `tickers/AAPL.json`).
   - Fichiers : `dashboard/e2e/loading.spec.ts`.
   - Fini quand : e2e vert ; qualité dashboard verte.
+  - Fait (2026-11-25) : `cache: "no-cache"` n'apparaît pas dans les en-têtes vus par Playwright (Chromium) : le
+    test enveloppe `window.fetch` et vérifie les arguments réels (manifest sans `?v=` en `no-cache`, puis
+    `overview.json?v=<empreinte>`). « Une seule fois » vérifié sur un aller-retour fiche → accueil → fiche →
+    accueil. Efficacité vérifiée par mutation (retrait de `no-cache` : 1 échec ; retrait de `?v=` : 2 échecs).
+    Aucune modification de `src/`. 93 tests e2e.
 
 ## Intégration continue, performance, documentation
 
