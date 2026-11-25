@@ -17,7 +17,7 @@ function Page({ route, manifest }: { route: Route; manifest: ManifestFile }) {
     case "overview":
       return <Overview manifest={manifest} />;
     case "ticker":
-      return <Ticker key={route.symbol} symbol={route.symbol} />;
+      return <Ticker key={route.symbol} manifest={manifest} symbol={route.symbol} />;
     case "not_found":
       return <NotFound />;
   }

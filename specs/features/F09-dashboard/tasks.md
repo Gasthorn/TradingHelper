@@ -215,13 +215,19 @@
 
 ## Ticker
 
-- [ ] **T16** Page Ticker sans graphique : symbole, sélecteurs, fiche vide — R14, R16, R4, R18 (état vide M1)
+- [x] **T16** Page Ticker sans graphique : symbole, sélecteurs, fiche vide — R14, R16, R4, R18 (état vide M1)
   - Tests : `e2e/ticker.spec.ts::brk.b case-insensitive` (`#/ticker/brk.b` → titre `BRK.B`), `::unknown symbol message`
     (`#/ticker/ZZZ` → « Pas de données pour ZZZ », aucune requête `tickers/ZZZ.json`), `::default period 6M`
     (sélecteur), `::strategy selector hidden` (fixture `m1`), `::signal card empty` (« Aucun signal pour l'instant »).
   - Fichiers : `dashboard/src/pages/Ticker.tsx` (résolution, chargement de `tickers/{SYMBOL}.json`, sélecteurs de
     période, d'overlays et de stratégie, emplacement du graphique, légende, fiche signal vide).
   - Fini quand : e2e vert ; qualité dashboard verte.
+  - Fait (2026-11-25) : nom et mention « indice de référence » sous le titre ; période en `radiogroup` (radios
+    natives), indicateurs en `fieldset` « Indicateurs », stratégie en `<select>` (« Toutes » + stratégies des
+    marqueurs) ; `DEFAULT_PERIOD` / `DEFAULT_OVERLAYS` exportés. Tests ajoutés : seul `tickers/{SYMBOL}.json` est
+    demandé, sélecteur visible sur `m1-signals`, fichier ticker absent → message. `vite.config.ts` : le serveur de
+    dev ignore `dist-*/`, `test-results/`, `playwright-report/` (rechargements parasites pendant `test:e2e`
+    constatés dans le navigateur). 58 tests e2e ; vérifié dans le navigateur sur SPY.
 
 - [ ] **T17** Graphique de prix (`lightweight-charts`) — R15, R16, R2, R8
   - Tests : `e2e/ticker.spec.ts::chart renders` (`data-bars` = nombre de barres de la période 6M), `::1M first bar`

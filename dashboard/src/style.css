@@ -180,3 +180,59 @@ main {
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+.subtitle {
+  margin-top: -0.5rem;
+  color: var(--muted);
+}
+
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  margin-block: 1rem;
+}
+
+.control-label {
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.segmented,
+.overlays {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.overlays {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.overlays legend {
+  float: left;
+}
+
+.segmented__item,
+.check,
+.strategy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.strategy select {
+  min-height: 44px;
+  font: inherit;
+}
+
+.price-chart {
+  width: 100%;
+  min-height: 360px;
+}

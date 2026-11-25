@@ -27,6 +27,8 @@ export default defineConfig(({ mode }) => {
   return {
     base: resolveBase(env.TH_DASHBOARD_BASE),
     plugins: [preact()],
+    // Builds et résultats e2e (F09 R25) : ne pas recharger le serveur de dev à chaque `npm run test:e2e`.
+    server: { watch: { ignored: ["**/dist-*/**", "**/test-results/**", "**/playwright-report/**"] } },
     test: {
       projects: TEST_TIMEZONES.map((tz) => ({
         extends: true,
