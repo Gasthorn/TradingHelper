@@ -86,7 +86,7 @@
   - Fichiers : `.github/workflows/deploy-pages.yml`, `tests/test_workflows.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T8** `daily.yml` : job `pipeline` — R1, R2, R4, R5, R6, R7, R11, R12
+- [x] **T8** `daily.yml` : job `pipeline` — R1, R2, R4, R5, R6, R7, R11, R12
   - Tests : `test_workflows.py::test_workflow_level_permissions[daily]`, `::test_job_permissions_match_table[daily]`,
     `::test_data_writers_share_group[daily]`, `::test_daily_triggers` (cron `30 22 * * 1-5`, `workflow_dispatch`),
     `::test_pipeline_step_order[daily]` (ingest → validate → commit), `::test_ingest_exit_2_stops_and_1_continues`

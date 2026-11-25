@@ -7,11 +7,14 @@ structure en lisant le YAML (PyYAML), puis par des runs réels (T13).
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
+
+from shell import find_bash
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
@@ -62,7 +65,9 @@ def _step_running(name: str, job: str, fragment: str) -> dict[str, Any]:
 # --- deploy-pages.yml (R1, R2, R8, R10 à R12) ---------------------------------------------------
 
 
-@pytest.mark.parametrize(("name", "expected"), [("deploy-pages", PAGES_PERMISSIONS)])
+@pytest.mark.parametrize(
+    ("name", "expected"), [("deploy-pages", PAGES_PERMISSIONS), ("daily", {"contents": "read"})]
+)
 def test_workflow_level_permissions(name: str, expected: dict[str, str]) -> None:
     assert _workflow(name)["permissions"] == expected
 
@@ -139,7 +144,7 @@ def test_deploy_pages_deploy_job() -> None:
     _step_using("deploy-pages", "deploy", "actions/deploy-pages")
 
 
-@pytest.mark.parametrize("name", ["deploy-pages"])
+@pytest.mark.parametrize("name", ["deploy-pages", "daily"])
 def test_actions_pinned_by_sha(name: str) -> None:
     uses = re.findall(r"^\s*(?:-\s*)?uses:\s*(\S+)", _text(name), re.M)
 
@@ -150,7 +155,10 @@ def test_actions_pinned_by_sha(name: str) -> None:
         assert PINNED.fullmatch(action), action
 
 
-@pytest.mark.parametrize(("name", "expected"), [("deploy-pages", {"build": 15, "deploy": 15})])
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [("deploy-pages", {"build": 15, "deploy": 15}), ("daily", {"pipeline": 30})],
+)
 def test_job_timeouts(name: str, expected: dict[str, int]) -> None:
     """R12 : chaque job (hors appel de workflow réutilisable) a son `timeout-minutes`."""
     timeouts = {
@@ -162,14 +170,14 @@ def test_job_timeouts(name: str, expected: dict[str, int]) -> None:
     assert timeouts == expected
 
 
-@pytest.mark.parametrize("name", ["deploy-pages"])
+@pytest.mark.parametrize("name", ["deploy-pages", "daily"])
 def test_jobs_run_on_ubuntu_latest(name: str) -> None:
     for job, config in _jobs(name).items():
         if "uses" not in config:
             assert config["runs-on"] == "ubuntu-latest", job
 
 
-@pytest.mark.parametrize("name", ["deploy-pages"])
+@pytest.mark.parametrize("name", ["deploy-pages", "daily"])
 def test_no_user_input_interpolated_in_run(name: str) -> None:
     """R14 : une valeur fournie par l'utilisateur passe par `env:`, jamais dans un `run:`."""
     for job in _jobs(name):
@@ -177,3 +185,121 @@ def test_no_user_input_interpolated_in_run(name: str) -> None:
             run = str(step.get("run", ""))
             assert "${{ inputs." not in run, (job, step.get("name"))
             assert "${{ github.event.inputs." not in run, (job, step.get("name"))
+
+
+# --- daily.yml : job `pipeline` (R1, R2, R4 à R7, R11, R12) ------------------------------------
+
+DATA_WRITERS = ["daily"]
+
+
+def _step_id(name: str, job: str, step_id: str) -> dict[str, Any]:
+    matches = [s for s in _steps(name, job) if s.get("id") == step_id]
+    assert len(matches) == 1, f"étape `{step_id}` attendue dans {name}/{job}"
+    return matches[0]
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+def test_pipeline_job_permissions(name: str) -> None:
+    assert _jobs(name)["pipeline"]["permissions"] == {"contents": "write"}
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+def test_data_writers_share_group(name: str) -> None:
+    assert _workflow(name)["concurrency"] == {"group": "data-writer", "cancel-in-progress": False}
+    for job, config in _jobs(name).items():
+        assert "concurrency" not in config, job
+
+
+def test_daily_triggers() -> None:
+    triggers = _workflow("daily")["on"]
+
+    assert set(triggers) == {"schedule", "workflow_dispatch"}
+    assert triggers["schedule"] == [{"cron": "30 22 * * 1-5"}]
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+def test_pipeline_step_order(name: str) -> None:
+    steps = _steps(name, "pipeline")
+    order = [
+        _step_id(name, "pipeline", "t0"),
+        _step_id(name, "pipeline", "ingest"),
+        _step_running(name, "pipeline", "th validate"),
+        _step_id(name, "pipeline", "commit"),
+        _step_using(name, "pipeline", "actions/upload-artifact"),
+    ]
+
+    assert [steps.index(step) for step in order] == sorted(steps.index(step) for step in order)
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+def test_pipeline_outputs(name: str) -> None:
+    assert _jobs(name)["pipeline"]["outputs"] == {
+        "pushed_sha": "${{ steps.commit.outputs.pushed_sha }}",
+        "head_sha": "${{ steps.commit.outputs.head_sha }}",
+        "ingest_exit_code": "${{ steps.ingest.outputs.exit_code }}",
+    }
+
+
+def _run_ingest_step(name: str, uv_exit: int, tmp_path: Path) -> tuple[int, str]:
+    """Exécute le script de l'étape `ingest` comme GitHub Actions (`bash -eo pipefail`), avec
+    une fonction `uv` qui sort avec `uv_exit` ; renvoie (code, contenu de GITHUB_OUTPUT)."""
+    bash = find_bash()
+    if bash is None:
+        pytest.skip("bash introuvable")
+    output = tmp_path / "github_output"
+    output.write_text("", encoding="utf-8")
+    script = f"uv() {{ return {uv_exit}; }}\n{_step_id(name, 'pipeline', 'ingest')['run']}"
+    result = subprocess.run(
+        [bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+        env={"GITHUB_OUTPUT": str(output), "PATH": "/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode, output.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+@pytest.mark.parametrize(("uv_exit", "step_exit"), [(0, 0), (1, 0), (2, 2)])
+def test_ingest_exit_2_stops_and_1_continues(
+    name: str, uv_exit: int, step_exit: int, tmp_path: Path
+) -> None:
+    """R7 : code 2 → arrêt ; code 1 → on continue, code mémorisé pour le job `conclude`."""
+    code, output = _run_ingest_step(name, uv_exit, tmp_path)
+
+    assert code == step_exit
+    assert output.splitlines() == [f"exit_code={uv_exit}"]
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+def test_validate_step_not_continue_on_error(name: str) -> None:
+    step = _step_running(name, "pipeline", "th validate")
+
+    assert "continue-on-error" not in step
+    assert "if" not in step
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+def test_commit_step_only_on_main(name: str) -> None:
+    assert _step_id(name, "pipeline", "commit")["if"] == "github.ref == 'refs/heads/main'"
+
+
+@pytest.mark.parametrize(("name", "kind"), [("daily", "daily")])
+def test_commit_uses_commit_message_and_data_path(name: str, kind: str) -> None:
+    step = _step_id(name, "pipeline", "commit")
+    run = step["run"]
+
+    assert step["env"]["T0"] == "${{ steps.t0.outputs.value }}"
+    assert f'th commit-message --kind {kind} --since "$T0"' in run
+    assert 'bash scripts/ci/commit-and-push.sh "$MSG" data/' in run
+    assert "dashboard" not in run
+
+
+@pytest.mark.parametrize("name", DATA_WRITERS)
+def test_report_artifact_always_uploaded(name: str) -> None:
+    step = _step_using(name, "pipeline", "actions/upload-artifact")
+
+    assert step["if"] == "always()"
+    assert step["with"]["path"] == "data/runs/"
+    assert step["with"]["if-no-files-found"] == "ignore"
+    assert step["with"]["retention-days"] == 30

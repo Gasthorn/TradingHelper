@@ -7,13 +7,13 @@ La configuration git de l'utilisateur est isolée (`GIT_CONFIG_GLOBAL`, `GIT_CON
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+
+from shell import find_bash
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "ci" / "commit-and-push.sh"
@@ -22,21 +22,7 @@ BOT_NAME = "github-actions[bot]"
 BOT_EMAIL = "41898282+github-actions[bot]@users.noreply.github.com"
 
 
-def _find_bash() -> str | None:
-    """Bash de Git for Windows sous Windows (jamais celui de WSL), sinon celui du PATH."""
-    if sys.platform == "win32":
-        git = shutil.which("git")
-        if git is None:
-            return None
-        for root in Path(git).resolve().parents:
-            for candidate in (root / "usr" / "bin" / "bash.exe", root / "bin" / "bash.exe"):
-                if candidate.is_file():
-                    return str(candidate)
-        return None
-    return shutil.which("bash")
-
-
-BASH = _find_bash()
+BASH = find_bash()
 
 pytestmark = pytest.mark.skipif(BASH is None, reason="bash introuvable")
 
