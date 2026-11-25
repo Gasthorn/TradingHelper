@@ -139,7 +139,7 @@
     `consoleErrors.allow(motif)` pour les erreurs attendues ; `gotoRoute`, `freezeClock`. Chemins ignorés ajoutés à
     `test_repo_hygiene.py::IGNORED_PATHS`. 7 tests e2e (dont 2 échecs attendus qui prouvent la détection).
 
-- [ ] **T11** Coque : titre, routeur, page introuvable, en-tête — R1, R5, R10
+- [x] **T11** Coque : titre, routeur, page introuvable, en-tête — R1, R5, R10
   - Tests : `e2e/routing.spec.ts::deep link reload` (`#/ticker/AAPL` rechargé → page Ticker, encore vide), `::unknown
     route` et `::portfolios not delivered` (« Page introuvable » + lien vers `#/`) ; `e2e/disclaimer.spec.ts` étendu :
     texte exact sur `#/`, `#/ticker/AAPL`, `#/inconnu` ; `npm run check:dist` exige le titre « TradingHelper ».
@@ -149,6 +149,10 @@
     `dashboard/scripts/check-dist.mjs`, `specs/features/F00-bootstrap/spec.md` (R12 et son critère : « TradingHelper »,
     décision 1 du plan), `dashboard/src/style.css`.
   - Fini quand : e2e vert ; tous les liens passent par `BASE_URL` ou par un hash ; qualité dashboard verte.
+  - Fait (2026-11-25) : `index.html` garde le bandeau statique et monte l'app dans `<div id="app">` (en-tête
+    `<header>` + `<main>` rendus par Preact) ; pages Overview et Ticker en squelettes (titre seul), Ticker remonté à
+    chaque symbole (`key`) ; `check:dist` exige `<title>` exactement « TradingHelper ». 18 tests e2e (dont 2 échecs
+    attendus) ; vérifié dans le navigateur (`#/inconnu`, `#/ticker/brk.b` → `BRK.B`, aucune erreur console).
 
 - [ ] **T12** États de chargement, d'erreur et vide — R3, R4
   - Tests : `e2e/errors.spec.ts::manifest missing`, `::overview 404`, `::invalid json`, `::schema_version 2` (message
