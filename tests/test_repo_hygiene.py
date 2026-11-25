@@ -569,3 +569,26 @@ def test_docs_list_export_modules() -> None:
     assert "uv run th export" in claude_md
     assert "npm run gen:types" in claude_md
     assert "build.py" in architecture
+
+
+def test_readme_documents_commit_message() -> None:
+    """F10 (T12) : `th commit-message` dans le tableau des commandes `th`."""
+    readme = _readme()
+
+    assert "| `uv run th commit-message --kind daily --since T0` |" in readme
+    assert "arrivent avec les features F07" in readme  # signaux, paper : toujours à venir
+
+
+def test_docs_list_orchestration_modules() -> None:
+    """F10 (plan) : `orchestration/commit_message.py` pur ; `scripts/ci/` dans l'arborescence."""
+    claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    architecture = (REPO_ROOT / "specs" / "02-architecture.md").read_text(encoding="utf-8")
+    pure, _side_effects = next(
+        line for line in claude_md.splitlines() if line.startswith("- Fonctions pures")
+    ).split("effets de bord", 1)
+
+    assert "orchestration/commit_message.py" in pure
+    assert "uv run th commit-message" in claude_md
+    assert "scripts/ci/commit-and-push.sh" in claude_md
+    assert "orchestration/" in architecture
+    assert "commit-and-push.sh" in architecture

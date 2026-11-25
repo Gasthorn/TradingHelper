@@ -73,13 +73,15 @@ TradingHelper/
 │   ├── backtest/    engine.py, costs.py, metrics.py, walk_forward.py
 │   ├── portfolio/   paper.py
 │   ├── models/      train.py, registry.py, evaluate.py
-│   └── export/      build.py (pur), dashboard.py
+│   ├── export/      build.py (pur), dashboard.py
+│   └── orchestration/ commit_message.py (pur, message de commit des workflows)
 ├── tests/                       # miroir de src/ + fixtures/ (données figées)
 ├── research/                    # Notebooks d'exploration (non importés)
 ├── dashboard/                   # App Vite
 │   ├── src/ (pages/, components/, lib/data.ts, types/ générés depuis schemas/)
 │   └── public/data/             # ❌ non commité, rempli par `th export` en CI
 ├── specs/                       # SDD (ce dossier)
+├── scripts/ci/commit-and-push.sh # commit + push des données par le bot (daily, backfill, weekly-train)
 └── .github/workflows/
     ├── ci.yml
     ├── daily.yml

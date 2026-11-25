@@ -126,7 +126,7 @@
     `tests/test_repo_hygiene.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T12** [P] Documentation des commandes et de l'arborescence — R5
+- [x] **T12** [P] Documentation des commandes et de l'arborescence — R5
   - Tests : `tests/test_repo_hygiene.py::test_readme_documents_commit_message` (commande dans le tableau des commandes
     `th`), `::test_docs_list_orchestration_modules` (`CLAUDE.md` : `orchestration/commit_message.py` parmi les modules
     purs, `uv run th commit-message` ; `02-architecture.md` : `orchestration/`, `scripts/ci/`).

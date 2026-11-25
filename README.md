@@ -42,6 +42,7 @@ La CLI `th` expose une commande par étape du pipeline. Les commandes disponible
 | `uv run th validate` | Vérifie les fichiers de prix (règles bloquantes et avertissements), sans les modifier. |
 | `uv run th export` | Produit les fichiers JSON du dashboard dans `dashboard/public/data/`, sans modifier les données. |
 | `uv run th schemas` | Régénère les JSON Schemas de `schemas/` depuis `src/tradinghelper/schemas.py`. |
+| `uv run th commit-message --kind daily --since T0` | Affiche le message de commit des données d'un run démarré à `T0` (utilisé par les workflows, voir [Mise en service](#mise-en-service)). |
 
 Les étapes suivantes (signaux, paper trading…) arrivent avec les features F07 et au-delà.
 

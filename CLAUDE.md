@@ -34,13 +34,15 @@ uv run th schemas                # régénérer schemas/ depuis schemas.py
 uv run th ingest                 # télécharger les cours (réseau) ; TH_DATA_DIR=<dossier> pour écrire ailleurs que data/
 uv run th validate               # valider data/raw/prices/ (lecture seule) ; code 1 si règle bloquante violée
 uv run th export [--out DIR]     # fichiers du dashboard (défaut dashboard/public/data/, reconstruit) ; code 1 si source invalide
+uv run th commit-message --kind daily|backfill|model --since T0   # message de commit des workflows (sans config)
 cd dashboard && npm run gen:types         # régénérer src/types/ depuis schemas/ (après `uv run th schemas`)
 cd dashboard && npm ci && npm run dev     # dashboard local (après `uv run th export`)
 ```
 
 ## Conventions de code
 - Python 3.12, typage complet, `from __future__ import annotations`, dataclasses/pydantic plutôt que dicts.
-- Fonctions pures dans `features/`, `backtest/metrics.py`, `data/bars.py`, `data/quality.py` (règles de qualité), `export/build.py` (construction des fichiers du dashboard) ; effets de bord (réseau, fichiers) isolés dans `data/source.py` (seul module qui importe yfinance/pandas), `data/storage.py`, `data/ingest.py`, `data/validate.py`, `export/dashboard.py`, `cli.py`.
+- Fonctions pures dans `features/`, `backtest/metrics.py`, `data/bars.py`, `data/quality.py` (règles de qualité), `export/build.py` (construction des fichiers du dashboard), `orchestration/commit_message.py` (message de commit des workflows) ; effets de bord (réseau, fichiers) isolés dans `data/source.py` (seul module qui importe yfinance/pandas), `data/storage.py`, `data/ingest.py`, `data/validate.py`, `export/dashboard.py`, `cli.py`.
+- Workflows GitHub Actions : logique de décision hors du YAML (commandes `th`, `scripts/ci/commit-and-push.sh`), structure vérifiée par `tests/test_workflows.py` ; actions tierces épinglées par SHA.
 - Jamais d'appel réseau dans les tests : utiliser `FakePriceSource` et les fixtures de `tests/fixtures/`.
 - Toute stochasticité passe par un `numpy.random.Generator` seedé reçu en paramètre.
 - Écritures de fichiers de données : toujours atomiques via `storage` (`atomic_write_json` ; prix : `write_prices_if_changed`, sérialisation canonique `dumps_prices`).
