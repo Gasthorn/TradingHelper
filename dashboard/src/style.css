@@ -259,3 +259,17 @@ main {
 .hint {
   font-size: 0.875rem;
 }
+
+.marker-legend {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+}
+
+.marker-legend li[data-action="BUY"] .marker-legend__action {
+  color: var(--up);
+}
+
+.marker-legend li[data-action="SELL"] .marker-legend__action {
+  color: var(--down);
+}

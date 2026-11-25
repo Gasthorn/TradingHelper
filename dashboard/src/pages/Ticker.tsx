@@ -13,10 +13,11 @@ import { ErrorPanel } from "../components/ErrorPanel";
 import { Loading } from "../components/Loading";
 import { useFile } from "../data/useData";
 import { PERIODS, type Period } from "../lib/dates";
-import { strategyOptions } from "../lib/markers";
+import { formatConfidence, formatDate, formatDecimal } from "../lib/format";
+import { type MarkerView, strategyOptions, visibleMarkers } from "../lib/markers";
 import { isAllNull, periodWindow } from "../lib/series";
-import type { ManifestFile, ManifestTicker } from "../types/export_manifest";
-import type { TickerFile, TickerSeries } from "../types/export_ticker";
+import type { ManifestFile, ManifestStrategy, ManifestTicker } from "../types/export_manifest";
+import type { ExportMarker, TickerFile, TickerSeries } from "../types/export_ticker";
 
 /** Premier affichage (décision Q10). */
 export const DEFAULT_OVERLAYS: Overlays = { sma20: true, sma50: true, sma200: false, bollinger: false };
@@ -64,7 +65,14 @@ function TickerContent({ manifest, ticker }: { manifest: ManifestFile; ticker: M
             <OverlaySelector value={overlays} unavailable={unavailableOverlays(file.data.series)} onChange={setOverlays} />
             <StrategySelector options={strategyOptions(file.data.markers)} value={strategy} onChange={setStrategy} />
           </div>
-          <PriceChartView series={file.data.series} period={period} overlays={overlays} />
+          <ChartWithMarkers
+            series={file.data.series}
+            markers={file.data.markers}
+            strategies={manifest.strategies}
+            period={period}
+            overlays={overlays}
+            strategy={strategy}
+          />
         </>
       )}
       <section aria-labelledby="signal-title">
@@ -142,8 +150,61 @@ function OverlaySelector({
   );
 }
 
+/** Graphique et légende des marqueurs visibles (période et stratégie choisies). */
+function ChartWithMarkers({
+  series,
+  markers,
+  strategies,
+  period,
+  overlays,
+  strategy,
+}: {
+  series: TickerSeries;
+  markers: readonly ExportMarker[];
+  strategies: readonly ManifestStrategy[];
+  period: Period;
+  overlays: Overlays;
+  strategy: string | null;
+}) {
+  const range = periodWindow(series.date, period);
+  const dates = new Set(series.date.slice(range.from, range.to + 1));
+  const visible = visibleMarkers(markers, strategy, dates, strategies);
+  return (
+    <>
+      <PriceChartView series={series} period={period} overlays={overlays} markers={visible} />
+      <MarkerLegend markers={visible} />
+    </>
+  );
+}
+
+/** Détail de chaque marqueur affiché : confiance, modèle et performance (P8). */
+function MarkerLegend({ markers }: { markers: readonly MarkerView[] }) {
+  if (markers.length === 0) return null;
+  return (
+    <ul class="marker-legend" aria-label="Signaux affichés">
+      {markers.map((m) => (
+        <li key={`${m.date}-${m.strategy_id}`} data-action={m.action}>
+          <strong class="marker-legend__action">{m.action === "BUY" ? "▲ BUY" : "▼ SELL"}</strong> · {formatDate(m.date)} ·{" "}
+          {m.strategy_id} · confiance {formatConfidence(m.confidence)} · modèle {m.modelId ?? "—"} · Sharpe OOS{" "}
+          {formatDecimal(m.sharpeOos)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Conteneur du graphique : création après chargement du module, puis mises à jour. */
-function PriceChartView({ series, period, overlays }: { series: TickerSeries; period: Period; overlays: Overlays }) {
+function PriceChartView({
+  series,
+  period,
+  overlays,
+  markers,
+}: {
+  series: TickerSeries;
+  period: Period;
+  overlays: Overlays;
+  markers: readonly MarkerView[];
+}) {
   const host = useRef<HTMLDivElement>(null);
   const [chart, setChart] = useState<PriceChart | null>(null);
   const initialOverlays = useRef(overlays);
@@ -169,6 +230,10 @@ function PriceChartView({ series, period, overlays }: { series: TickerSeries; pe
   useEffect(() => {
     chart?.setOverlays(overlays);
   }, [chart, overlays]);
+
+  useEffect(() => {
+    chart?.setMarkers(markers);
+  }, [chart, markers]);
 
   return <div ref={host} class="price-chart" data-testid="price-chart" />;
 }

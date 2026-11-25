@@ -67,6 +67,12 @@ export function formatPercent(x: number | null, opts: { signed?: boolean } = {})
   return `${formatNumber(x * 100, 2, opts.signed ?? false)}${NBSP}%`;
 }
 
+/** Ratio sans unité (ex. Sharpe) à 2 décimales. */
+export function formatDecimal(x: number | null): string {
+  if (!isNumber(x)) return EMPTY;
+  return formatNumber(x, 2, false);
+}
+
 /** Confiance (dans [0, 1]) en pourcentage entier. */
 export function formatConfidence(x: number | null): string {
   if (!isNumber(x)) return EMPTY;

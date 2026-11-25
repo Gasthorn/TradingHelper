@@ -248,7 +248,7 @@
     « (historique insuffisant) ». Test ajouté : Max = toute la série. 66 tests e2e ; vérifié dans le navigateur
     sur AAPL réel (128 barres en 6M).
 
-- [ ] **T18** Marqueurs et détail P8 — R17, R8
+- [x] **T18** Marqueurs et détail P8 — R17, R8
   - Tests : `e2e/ticker.spec.ts::m1-signals markers` (fixture `m1-signals`, AAPL : `data-markers="2"`, légende listant
     BUY ▲ le 20/11/2026 et SELL ▼ le 23/11/2026 avec leur confiance, rien le 19/11), `::marker detail P8` (stratégie,
     confiance, modèle et `sharpe_oos` affichés, « — » pour une stratégie absente du manifest), `::strategy selector
@@ -258,6 +258,11 @@
     `arrowDown`/`aboveBar` « SELL »), `dashboard/src/pages/Ticker.tsx` (sélecteur de stratégie, liste des marqueurs
     visibles accessible au clavier).
   - Fini quand : e2e vert ; qualité dashboard verte.
+  - Fait (2026-11-25) : marqueurs par `createSeriesMarkers` (`data-markers`) ; détail P8 dans une liste « Signaux
+    affichés » sous le graphique (lisible au clavier et par les lecteurs d'écran) plutôt que par le réticule ;
+    marqueurs limités à la période affichée. Ajout de `formatDecimal` (Sharpe, 2 décimales) et de son test.
+    Tests ajoutés : modèle et Sharpe lus dans `manifest.strategies` (manifest modifié par interception) ; fixture
+    `m1` sans légende. 71 tests e2e ; vérifié dans le navigateur (données réelles sans signal : 0 marqueur).
 
 - [ ] **T19** [P] Thème du graphique — R7
   - Tests : `e2e/theme.spec.ts::chart follows theme` (sur `#/ticker/AAPL`, `data-theme` du graphique et couleur de fond

@@ -19,8 +19,13 @@ import {
   type ISeriesApi,
   LineSeries,
   LineStyle,
+  type SeriesMarker,
+  type Time,
   createChart,
+  createSeriesMarkers,
 } from "lightweight-charts";
+
+import type { MarkerView } from "../lib/markers";
 
 import { type BarWindow, linePoints } from "../lib/series";
 import type { TickerSeries } from "../types/export_ticker";
@@ -35,6 +40,8 @@ export interface Overlays {
 export interface PriceChart {
   setData(series: TickerSeries, window: BarWindow): void;
   setOverlays(overlays: Overlays): void;
+  /** Marqueurs BUY ▲ sous la bougie, SELL ▼ au-dessus, avec leur libellé (R8, R17). */
+  setMarkers(markers: readonly MarkerView[]): void;
   destroy(): void;
 }
 
@@ -127,6 +134,9 @@ export function createPriceChart(container: HTMLElement, initial: Overlays): Pri
   }
   chart.panes()[1]?.setStretchFactor(0.3);
 
+  const markerLayer = createSeriesMarkers(candles, []);
+  container.dataset.markers = "0";
+
   let overlays = initial;
   let available: Record<keyof Overlays, boolean> = { sma20: true, sma50: true, sma200: true, bollinger: true };
 
@@ -186,6 +196,16 @@ export function createPriceChart(container: HTMLElement, initial: Overlays): Pri
     setOverlays(next) {
       overlays = next;
       applyOverlays();
+    },
+
+    setMarkers(markers) {
+      const items: SeriesMarker<Time>[] = markers.map((m) =>
+        m.action === "BUY"
+          ? { time: m.date, position: "belowBar", shape: "arrowUp", color: palette.up, text: "BUY" }
+          : { time: m.date, position: "aboveBar", shape: "arrowDown", color: palette.down, text: "SELL" },
+      );
+      markerLayer.setMarkers(items);
+      container.dataset.markers = String(items.length);
     },
 
     destroy() {

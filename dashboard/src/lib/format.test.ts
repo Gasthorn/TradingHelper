@@ -6,6 +6,7 @@ import {
   formatAmount,
   formatConfidence,
   formatDate,
+  formatDecimal,
   formatPercent,
   formatPrice,
 } from "./format";
@@ -125,5 +126,16 @@ describe("changeParts (R8 : jamais la couleur seule)", () => {
 
   it("donne — pour une variation indisponible (une seule barre)", () => {
     expect(changeParts(null)).toEqual({ direction: "none", arrow: "", text: EMPTY });
+  });
+});
+
+describe("formatDecimal (ratios sans unité : Sharpe)", () => {
+  it("affiche 2 décimales en fr-FR", () => {
+    expect(formatDecimal(1.1)).toBe("1,10");
+    expect(formatDecimal(-0.456)).toBe(`${MINUS}0,46`);
+  });
+
+  it("affiche — pour null", () => {
+    expect(formatDecimal(null)).toBe(EMPTY);
   });
 });

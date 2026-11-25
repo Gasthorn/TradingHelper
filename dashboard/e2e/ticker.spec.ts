@@ -1,5 +1,6 @@
 /** Page Ticker (spec F09 — R14–R18 en M1). Graphique lu via ses attributs data-* (décision 3 du plan). */
 import aapl from "../tests/fixtures/m1/tickers/AAPL.json" with { type: "json" };
+import aaplSignals from "../tests/fixtures/m1-signals/tickers/AAPL.json" with { type: "json" };
 import { periodWindow } from "../src/lib/series";
 import { expect, gotoRoute, test, useFixture } from "./support";
 
@@ -155,5 +156,83 @@ test.describe("graphique de prix (R15, R16, R8)", () => {
     await gotoRoute(page, "#/ticker/AAPL");
     await expect(chart(page)).toHaveAttribute("data-panes", "2");
     await expect(chart(page)).toHaveAttribute("data-rsi-lines", "30,70");
+  });
+});
+
+test.describe("marqueurs de signaux (R17, R8, P8)", () => {
+  const chart = (page: import("@playwright/test").Page) => page.getByTestId("price-chart");
+  const legend = (page: import("@playwright/test").Page) => page.getByRole("list", { name: "Signaux affichés" });
+
+  test("fixture m1-signals : BUY le 20/11 et SELL le 23/11 sur AAPL, rien le 19/11 (HOLD)", async ({ page }) => {
+    await useFixture(page, "m1-signals");
+    await gotoRoute(page, "#/ticker/AAPL");
+
+    await expect(chart(page)).toHaveAttribute("data-markers", "2");
+    const items = legend(page).getByRole("listitem");
+    await expect(items).toHaveCount(2);
+    await expect(items.nth(0)).toContainText("▲ BUY");
+    await expect(items.nth(0)).toContainText("20/11/2026");
+    await expect(items.nth(0)).toContainText("67 %");
+    await expect(items.nth(1)).toContainText("▼ SELL");
+    await expect(items.nth(1)).toContainText("23/11/2026");
+    await expect(items.nth(1)).toContainText("38 %");
+    await expect(legend(page)).not.toContainText("19/11/2026");
+  });
+
+  test("détail P8 : stratégie, confiance, modèle et Sharpe OOS (— si absente du manifest)", async ({ page }) => {
+    await useFixture(page, "m1-signals");
+    await gotoRoute(page, "#/ticker/AAPL");
+
+    const first = legend(page).getByRole("listitem").first();
+    await expect(first).toContainText("lgbm_dir5_v3");
+    await expect(first).toContainText("confiance 67 %");
+    await expect(first).toContainText("modèle —");
+    await expect(first).toContainText("Sharpe OOS —");
+  });
+
+  test("détail P8 : modèle et Sharpe OOS lus dans manifest.strategies", async ({ page }) => {
+    await useFixture(page, "m1-signals");
+    await page.route("**/data/manifest.json*", async (route) => {
+      const response = await route.fetch();
+      const manifest = (await response.json()) as { strategies: unknown[] };
+      manifest.strategies = [{ id: "lgbm_dir5_v3", kind: "model", model_id: "lgbm_dir5_20261122_ab12cd", sharpe_oos: 1.1 }];
+      await route.fulfill({ response, json: manifest });
+    });
+    await gotoRoute(page, "#/ticker/AAPL");
+
+    const first = legend(page).getByRole("listitem").first();
+    await expect(first).toContainText("modèle lgbm_dir5_20261122_ab12cd");
+    await expect(first).toContainText("Sharpe OOS 1,10");
+  });
+
+  test("le sélecteur de stratégie filtre les marqueurs ; un marqueur hors série est ignoré", async ({ page }) => {
+    await useFixture(page, "m1-signals");
+    const markers = [
+      { date: "2026-11-19", strategy_id: "sma_cross", action: "SELL", confidence: 0.55 },
+      ...aaplSignals.markers,
+      { date: "2026-11-28", strategy_id: "lgbm_dir5_v3", action: "BUY", confidence: 0.6 }, // samedi : hors série
+    ];
+    await page.route("**/data/tickers/AAPL.json*", (route) => route.fulfill({ json: { ...aaplSignals, markers } }));
+    await gotoRoute(page, "#/ticker/AAPL");
+
+    await expect(chart(page)).toHaveAttribute("data-markers", "3");
+    const select = page.getByRole("combobox", { name: "Stratégie" });
+    await expect(select.getByRole("option")).toHaveText(["Toutes", "lgbm_dir5_v3", "sma_cross"]);
+
+    await select.selectOption("lgbm_dir5_v3");
+    await expect(chart(page)).toHaveAttribute("data-markers", "2");
+    await expect(legend(page)).not.toContainText("sma_cross");
+
+    await select.selectOption("sma_cross");
+    await expect(chart(page)).toHaveAttribute("data-markers", "1");
+    await expect(legend(page)).toContainText("▼ SELL");
+  });
+
+  test("fixture m1 : aucun marqueur, pas de légende", async ({ page }) => {
+    await useFixture(page, "m1");
+    await gotoRoute(page, "#/ticker/AAPL");
+
+    await expect(chart(page)).toHaveAttribute("data-markers", "0");
+    await expect(legend(page)).toHaveCount(0);
   });
 });
