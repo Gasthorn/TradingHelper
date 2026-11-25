@@ -13,7 +13,7 @@
 
 ## Logique pure (`dashboard/src/lib/`, Vitest)
 
-- [ ] **T1** Vitest et URL des données — R23, R2, R10
+- [x] **T1** Vitest et URL des données — R23, R2, R10
   - Tests : `src/lib/urls.test.ts` : `dataUrl` (`${base}data/${path}?v=${sha256}`), base `/` et `/TradingHelper/`,
     chemin imbriqué `tickers/AAPL.json`, `MANIFEST_PATH`.
   - Fichiers : `dashboard/package.json` (devDependency `vitest`, script `test`), `package-lock.json`,
@@ -21,6 +21,9 @@
     fichier de setup fixe `process.env.TZ` à `America/Los_Angeles` puis `Pacific/Auckland`), `dashboard/tsconfig.json`
     (types `vitest`), `dashboard/src/lib/urls.ts`.
   - Fini quand : `npm test` exécute les tests sous les deux fuseaux et sort en 0 ; qualité dashboard verte.
+  - Fait (2026-11-25) : `vitest` 5.1.2 ; fuseau passé par `test.env.TZ` de chaque projet (pas de fichier de setup),
+    vérifié par `urls.test.ts` ; `tsconfig.json` inchangé (imports explicites depuis `vitest`, pas de globales).
+    12 tests (6 × 2 fuseaux).
 
 - [ ] **T2** [P] Formats `fr-FR` — R11, R8
   - Tests : `src/lib/format.test.ts` : `232,40 $`, `0,1234 $` (prix < 1), `1 234,56 $` (séparateur de milliers

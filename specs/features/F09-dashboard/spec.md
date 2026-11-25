@@ -1,6 +1,6 @@
 # F09 — Dashboard GitHub Pages
 
-- **Statut** : 🧭 Planned (2026-11-25)
+- **Statut** : 🚧 In progress (M1, depuis le 2026-11-25)
 - **Milestone** : M1 (exigences et critères `[M1]` : socle, Overview, Ticker) puis M3/M4 (`[M3]` : Portfolios,
   Portfolio, Models, Health, contenus dépendant des signaux et portefeuilles)
 - **Dépend de** : F08 (M1 pour `[M1]`, M3 pour `[M3]`) ; F00 R14 (`base` Vite configurable)

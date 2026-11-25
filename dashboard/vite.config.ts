@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import preact from "@preact/preset-vite";
 import { defineConfig, loadEnv } from "vite";
 
@@ -15,10 +16,27 @@ function resolveBase(raw: string | undefined): string {
   return base;
 }
 
+/**
+ * Tests unitaires (spec F09 — R23) : chaque test tourne sous deux fuseaux extrêmes, pour
+ * détecter toute conversion implicite d'une date de séance en instant (R11).
+ */
+const TEST_TIMEZONES = ["America/Los_Angeles", "Pacific/Auckland"] as const;
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "TH_");
   return {
     base: resolveBase(env.TH_DASHBOARD_BASE),
     plugins: [preact()],
+    test: {
+      projects: TEST_TIMEZONES.map((tz) => ({
+        extends: true,
+        test: {
+          name: tz,
+          environment: "node",
+          include: ["src/**/*.test.ts"],
+          env: { TZ: tz },
+        },
+      })),
+    },
   };
 });
