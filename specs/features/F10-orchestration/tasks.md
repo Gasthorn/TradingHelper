@@ -41,7 +41,7 @@
     `tests/orchestration/__init__.py` si nécessaire, `tests/orchestration/test_commit_message.py`, `tests/test_repo_hygiene.py`.
   - Fini quand : tests verts ; qualité verte.
 
-- [ ] **T4** Commande `th commit-message --kind … --since …` — R5
+- [x] **T4** Commande `th commit-message --kind … --since …` — R5
   - Tests : `tests/test_cli_commit_message.py::test_prints_message_from_reports` (fixtures sous `TH_DATA_DIR`, une ligne
     sur stdout), `::test_no_runs_dir_uses_current_session` (horloge injectée via `cli._now`),
     `::test_invalid_report_exits_1` (fichier cité sur stderr), `::test_invalid_since_exits_2[sans-fuseau|mal-forme]`,

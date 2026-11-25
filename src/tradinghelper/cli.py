@@ -31,6 +31,7 @@ from tradinghelper.data.storage import (
     RunReportError,
     append_run_report_entry,
     data_dir,
+    read_run_reports,
     run_report_path,
     update_run_report,
 )
@@ -43,10 +44,11 @@ from tradinghelper.export.dashboard import (
     resolve_git_sha,
 )
 from tradinghelper.export.dashboard import export as run_export
+from tradinghelper.orchestration.commit_message import PREFIX, CommitKind, build_commit_message
 from tradinghelper.schemas import ValidateViolation, write_json_schemas
 
 # Commandes qui n'ont pas besoin d'une config valide.
-CONFIG_EXEMPT_COMMANDS: frozenset[str] = frozenset({"schemas"})
+CONFIG_EXEMPT_COMMANDS: frozenset[str] = frozenset({"schemas", "commit-message"})
 
 HELP_FLAGS = frozenset({"--help", "-h"})
 
@@ -372,3 +374,49 @@ def export(
         raise typer.Exit(code=1) from None
     for line in _export_summary(outcome):
         typer.echo(line)
+
+
+# --- th commit-message (F10) -------------------------------------------------------------------
+
+
+def _parse_since(value: str) -> datetime:
+    """`--since` : horodatage ISO-8601 avec fuseau (`Z` accepté), converti en UTC ; sinon code 2."""
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        raise _usage_error(f"--since invalide : {value!r} (ISO-8601 attendu)") from None
+    if parsed.tzinfo is None:
+        raise _usage_error(f"--since sans fuseau horaire : {value!r} (ex. 2026-11-24T22:30:00Z)")
+    return parsed.astimezone(UTC)
+
+
+def _parse_kind(value: str) -> CommitKind:
+    for kind in PREFIX:
+        if kind == value:
+            return kind
+    raise _usage_error(f"--kind inconnu : {value!r} (attendu : {', '.join(PREFIX)})")
+
+
+@app.command("commit-message")
+def commit_message(
+    kind: Annotated[str, typer.Option(help="Type de commit : daily, backfill ou model.")],
+    since: Annotated[
+        str,
+        typer.Option(help="Début du run (T0), ISO-8601 avec fuseau, ex. 2026-11-24T22:30:00Z."),
+    ],
+) -> None:
+    """Affiche le message de commit des données du run démarré à --since (F10 R5).
+
+    Journalise les réécritures d'historique des exécutions `th ingest` démarrées depuis T0
+    (P5). Lecture seule, sans réseau ni configuration. Code 1 si un rapport de run est
+    illisible ou hors contrat, 2 si un argument est invalide.
+    """
+    commit_kind = _parse_kind(kind)
+    started = _parse_since(since)
+    try:
+        reports = read_run_reports(data_dir() / "runs")
+    except RunReportError as err:
+        typer.echo(f"Rapport de run invalide : {err}", err=True)
+        raise typer.Exit(code=1) from None
+    session = NyseCalendar().last_closed_session(_now())
+    typer.echo(build_commit_message(commit_kind, reports, since=started, fallback_session=session))
