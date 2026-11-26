@@ -1,0 +1,266 @@
+{
+  "schema_version": 1,
+  "session_date": "2026-11-25",
+  "ingest": [
+    {
+      "started_at": "2026-11-26T04:16:47.250658Z",
+      "finished_at": "2026-11-26T04:16:51.187921Z",
+      "duration_s": 3.937263,
+      "args": {
+        "symbols": null,
+        "full": false,
+        "start": null
+      },
+      "exit_code": 0,
+      "tickers": [
+        {
+          "symbol": "AAPL",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "MSFT",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "NVDA",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "GOOGL",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "META",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "AMZN",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "HD",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "JPM",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "V",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "JNJ",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 4250,
+          "history_rewritten": true,
+          "rewrite_reason": "revision",
+          "attempts": 2,
+          "error": null
+        },
+        {
+          "symbol": "UNH",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "LLY",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "XOM",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "CVX",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "PG",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "KO",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "WMT",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "CAT",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "NEE",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "LIN",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        },
+        {
+          "symbol": "SPY",
+          "status": "ok",
+          "mode": "incremental",
+          "bars_added": 1,
+          "bars_revised": 1,
+          "history_rewritten": false,
+          "rewrite_reason": null,
+          "attempts": 1,
+          "error": null
+        }
+      ],
+      "warnings": []
+    }
+  ],
+  "validate": [
+    {
+      "started_at": "2026-11-26T04:16:51.845424Z",
+      "finished_at": "2026-11-26T04:16:52.414938Z",
+      "duration_s": 0.569514,
+      "args": {
+        "symbols": null,
+        "all_history": false
+      },
+      "exit_code": 0,
+      "files_checked": 21,
+      "violations": [],
+      "warnings": []
+    }
+  ]
+}
